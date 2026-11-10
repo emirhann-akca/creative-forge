@@ -144,3 +144,19 @@ def test_lint_rules():
 
     h["cut_s"] = 5.6  # inside the last 3 s without patches
     assert [i.rule for i in lint(AdSpec.model_validate(d))] == ["tail-ui"]
+
+
+@pytest.mark.parametrize(
+    "prompt, flagged",
+    [
+        ("Add a hand holding a blower, entering from the bottom right corner. Do not add any text.", False),
+        ("A hand with a wand enters from the left edge of the frame. No text.", False),
+        # verbatim from the one real `forge ideate` run: "from ... corner" satisfied the old regex
+        ("A human hand wiping dust from the top-right corner of a supermarket shelf. No text.", True),
+    ],
+)
+def test_hand_must_enter_from_an_edge(prompt, flagged):
+    d = minimal()
+    d["concepts"][0]["hook"]["image_prompt"] = prompt
+    rules = {i.rule for i in lint(AdSpec.model_validate(d))}
+    assert ("hand-enters-from-edge" in rules) is flagged

@@ -1,0 +1,73 @@
+# Verbatim output of the one real `forge ideate` run (10 Nov 2026): Gemini 2.5 Flash on Vertex AI, library embedded
+# with text-embedding-005, two synthetic test-pattern clips (clip_a.mp4 and clip_b.mp4 are not in the repo).
+# Kept unedited as evidence, including what it got wrong:
+#   - dust-reveal says "wiping dust from the top-right corner". That passed the old edge-entry rule, which accepted a
+#     bare "from ... corner"; the rule now needs an entering verb, and `forge plan` flags this concept.
+#   - shelf-organize asks the image model to rearrange products (lesson L08). No lint rule catches that: lint is
+#     lexical, so a person still reads every draft.
+#
+# Drafted by `forge ideate` (gemini-2.5-flash, 5 model requests, library vertex-text-embedding-005).
+# A draft, not a decision: review the prompts and cut points, and fill the TODOs before a paid run.
+# shelf-organize: TODO strip-text: fill hook.text_regions with the text boxes of the real first frame
+# shelf-organize rationale: Draws on S05-satisfying-asmr for the satisfying reveal. Adheres to S02-ice-pick-centre by having the hand enter from the edge.
+# dust-reveal: TODO strip-text: fill hook.text_regions with the text boxes of the real first frame
+# dust-reveal rationale: Draws on S05-satisfying-asmr for the satisfying reveal. Adheres to S03-mud-whole-frame-prompt and L08-image-model-redraws-products by using 'effect=\'dust\'' and not asking the image model to create the dust. Hand enters from edge.
+# magic-sort-wand: TODO strip-text: fill hook.text_regions with the text boxes of the real first frame
+# magic-sort-wand rationale: Draws on S05-satisfying-asmr for the satisfying reveal. Adheres to S02-ice-pick-centre by having the wand enter from the edge.
+version: 1
+name: ideas
+providers: vertex
+concepts:
+- id: shelf-organize
+  gameplay:
+    path: clip_b.mp4
+    in_s: 2.0
+    out_s: 5.0
+  hook:
+    image_prompt: A human hand quickly and neatly organizing a messy supermarket shelf, aligning products perfectly.
+      The hand enters from the left edge of the frame. No text.
+    video_prompt: A quick, satisfying animation of a hand organizing a messy supermarket shelf, making products
+      align perfectly, ending on the original organized shelf.
+    duration_s: 6
+    cut_s: 3.0
+  end_card:
+    headline: Organize & Clear!
+    button: PLAY NOW
+  music:
+    prompt: Upbeat, satisfying puzzle game music.
+- id: dust-reveal
+  gameplay:
+    path: clip_b.mp4
+    in_s: 6.0
+    out_s: 9.0
+  hook:
+    image_prompt: A human hand wiping dust from the top-right corner of a supermarket shelf, revealing clean, sorted
+      products underneath. No text.
+    video_prompt: A satisfying animation of a hand wiping away dust from a supermarket shelf, revealing perfectly
+      sorted products, ending on the original clean shelf.
+    duration_s: 8
+    cut_s: 5.0
+    effects:
+    - type: dust
+  end_card:
+    headline: Dust Away Mess!
+    button: PLAY NOW
+  music:
+    prompt: Gentle, clean, satisfying reveal music.
+- id: magic-sort-wand
+  gameplay:
+    path: clip_b.mp4
+    in_s: 10.0
+    out_s: 13.0
+  hook:
+    image_prompt: A magical, glowing wand entering from the bottom-right corner of the frame, hovering over a chaotic
+      supermarket shelf, ready to sort products. No text.
+    video_prompt: A magical wand quickly and efficiently sorts a chaotic supermarket shelf, making products snap
+      into perfect alignment, ending on the original sorted shelf.
+    duration_s: 6
+    cut_s: 3.0
+  end_card:
+    headline: Magic Sort!
+    button: PLAY NOW
+  music:
+    prompt: Whimsical, magical, fast-paced sorting music.

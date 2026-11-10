@@ -16,7 +16,11 @@ class LintIssue:
 
 
 _HAND = re.compile(r"\b(hand|hands|finger|fingers|tool|nozzle|lance|torch|blower|brush|knife)\b", re.I)
-_EDGE = re.compile(r"\b(enter|enters|entering|from)\b.*\b(edge|corner|side|bottom|top|left|right)\b", re.I)
+# Needs an entering verb: "wiping dust from the top-right corner" (a real Gemini draft) is not an edge entry.
+_EDGE = re.compile(
+    r"\b(enters?|entering|reach(es|ing)? in|comes? in|coming in)\b[^.]*\b(edge|corner|side|bottom|top|left|right)\b",
+    re.I,
+)
 _NO_TEXT = re.compile(r"\b(no|not|without|don'?t|do not)\b[^.]*\btext\b", re.I)
 _COVER_ALL = re.compile(r"\b(cover|bury|coat)\b[^.]*\b(entire|whole|everything|all)\b", re.I)
 _EFFECT_WORDS = re.compile(r"\b(dust|mud|ice|frost|snow|grime|dirt)\b", re.I)
