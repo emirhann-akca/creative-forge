@@ -1,0 +1,22 @@
+# Unit prices used when this pipeline produced real ads.
+# They WILL drift: verify on Google Cloud's Vertex AI pricing page before trusting an estimate,
+# and override them with a local file (`forge plan --pricing pricing.local.yaml`).
+as_of: "2026-10"
+currency: USD
+note: >-
+  Prices observed in October 2026 for Vertex AI generative media. Verify on Google Cloud's
+  pricing page (cloud.google.com/vertex-ai/generative-ai/pricing) before relying on them.
+video:
+  # Veo 3.1, 720p/1080p, per generated second (charged per sample)
+  per_second_with_audio: 0.40
+  per_second_silent: 0.20
+image_edit:
+  # Gemini 3 Pro Image, approximate per output image
+  per_image: 0.134
+music:
+  # Lyria 3 Pro, per generated track
+  per_track: 0.08
+judge:
+  # The Gemini video judge was not priced in the October 2026 notes.
+  # Leave null and the budget guard refuses judge calls while a budget is set; fill it in to allow them.
+  per_call: null
