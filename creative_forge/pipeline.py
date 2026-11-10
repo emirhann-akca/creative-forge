@@ -280,7 +280,7 @@ class Pipeline:
                     )
                 )
 
-            sheet_src = res.exports[0].path
+            sheet_src = next((x.path for x in res.exports if x.format == "9:16"), res.exports[0].path)
             x = tl["crossfade"]
             res.contact_sheet = contact_sheet(
                 sheet_src,

@@ -105,7 +105,14 @@ class VertexClient:
             try:
                 r = self.session.post(url, data=json.dumps(body), headers=headers, timeout=self.timeout_s)
             except requests.ConnectionError as e:
-                raise TransientError(f"connection error: {e}") from e
+                # Refused / unresolvable / connect timeout: the request never reached the server.
+                # A connection dropped mid-request may have been accepted, so a submit is not retried.
+                never_sent = isinstance(e, requests.ConnectTimeout) or any(
+                    marker in repr(e) for marker in ("NewConnectionError", "NameResolutionError", "Failed to resolve")
+                )
+                if idempotent or never_sent:
+                    raise TransientError(f"connection error: {e}") from e
+                raise VertexError(f"connection dropped while submitting; the job may exist. Not retried: {e}") from e
             except requests.Timeout as e:
                 if idempotent:
                     raise TransientError(f"timeout: {e}") from e

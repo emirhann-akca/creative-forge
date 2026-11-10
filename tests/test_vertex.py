@@ -140,6 +140,19 @@ def test_submit_is_not_retried_on_server_error_or_timeout(frames):
     assert len(s.calls) == 1
 
 
+def test_dropped_connection_is_not_retried_on_submit_but_refused_is():
+    dropped = requests.ConnectionError("('Connection aborted.', RemoteDisconnected('closed'))")
+    c, s = client([dropped])
+    with pytest.raises(VertexError, match="may exist"):
+        c.post("https://x/y:predictLongRunning", {}, idempotent=False)
+    assert len(s.calls) == 1
+    refused = requests.ConnectionError("HTTPSConnectionPool: NewConnectionError('Connection refused')")
+    c, s = client([refused, FakeResponse(200, {"name": "ops/1"})])
+    assert c.post("https://x/y:predictLongRunning", {}, idempotent=False) == {"name": "ops/1"}
+    c, s = client([dropped, FakeResponse(200, {"done": True})])
+    assert c.post("https://x/y:fetchPredictOperation", {}) == {"done": True}  # polling is idempotent
+
+
 def test_rate_limit_is_retried(frames):
     c, s = client([FakeResponse(429, text="quota"), FakeResponse(200, {"ok": 1})])
     assert c.post("https://x/y", {}, idempotent=False) == {"ok": 1}
