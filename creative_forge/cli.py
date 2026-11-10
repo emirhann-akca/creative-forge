@@ -195,6 +195,49 @@ def cmd_demo(a: argparse.Namespace) -> int:
     return 1 if rr.status is Status.FAIL else 0
 
 
+def cmd_review(a: argparse.Namespace) -> int:
+    from creative_forge.review import ReviewError, decide, load_exports, load_review
+
+    run = Path(a.run_dir)
+    try:
+        if a.approve or a.reject:
+            for f in a.approve or []:
+                decide(run, f, "approve", a.note or "", a.reviewer)
+            for f in a.reject or []:
+                decide(run, f, "reject", a.note or "", a.reviewer)
+        else:
+            for r in load_exports(run):
+                current = load_review(run)["decisions"].get(r.file, {}).get("decision", "undecided")
+                flags = f"  failed: {', '.join(r.failed)}" if r.failed else ""
+                flags += f"  warn: {', '.join(r.warned)}" if r.warned else ""
+                print(f"\n{r.file}  QA {r.status.upper()}  ({current}){flags}")
+                choice = input("  [a]pprove / [r]eject / [s]kip: ").strip().lower()[:1]
+                if choice in ("a", "r"):
+                    note = input("  note: ")
+                    decide(run, r.file, "approve" if choice == "a" else "reject", note, a.reviewer)
+    except ReviewError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    decisions = load_review(run)["decisions"]
+    for r in load_exports(run):
+        d = decisions.get(r.file, {})
+        print(f"{r.file}  QA {r.status}  {d.get('decision', 'undecided')}  {d.get('note', '')}")
+    return 0
+
+
+def cmd_publish(a: argparse.Namespace) -> int:
+    from creative_forge.review import ReviewError, publish
+
+    try:
+        manifest = publish(Path(a.run_dir), Path(a.to), a.override)
+    except ReviewError as e:
+        print(f"publish refused: {e}", file=sys.stderr)
+        return 1
+    n = len(json.loads(manifest.read_text(encoding="utf-8"))["exports"])
+    print(f"published {n} export(s) to {a.to} (manifest: {manifest.name})")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="forge", description="Spec-driven AI-hook video ad pipeline with QA.")
     p.add_argument("--version", action="version", version=f"creative-forge {__version__}")
@@ -238,6 +281,20 @@ def build_parser() -> argparse.ArgumentParser:
     sd.add_argument("--keep-work", action="store_true")
     sd.add_argument("--ocr", choices=["auto", "vision", "tesseract", "off"], default="auto")
     sd.set_defaults(fn=cmd_demo)
+
+    sv = sub.add_parser("review", help="approve or reject each export of a run (interactive without flags)")
+    sv.add_argument("run_dir", help="output directory of `forge run` (holds report.json)")
+    sv.add_argument("--approve", nargs="+", metavar="FILE")
+    sv.add_argument("--reject", nargs="+", metavar="FILE")
+    sv.add_argument("--note", help="note stored with the decision (required to reject)")
+    sv.add_argument("--reviewer", help="defaults to the OS user name")
+    sv.set_defaults(fn=cmd_review)
+
+    su = sub.add_parser("publish", help="copy approved exports and a manifest; refuses on failed QA")
+    su.add_argument("run_dir")
+    su.add_argument("--to", required=True, help="delivery directory")
+    su.add_argument("--override", metavar="REASON", help="publish approved exports despite failed checks")
+    su.set_defaults(fn=cmd_publish)
     return p
 
 
