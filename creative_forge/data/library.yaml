@@ -1,0 +1,123 @@
+# Retrieval library for `forge ideate` (search_creative_library).
+#
+# lessons:        the 14 production defects from the October 2026 ad batch, with how this pipeline prevents or
+#                 checks each one. These are real.
+# past_concepts:  SYNTHETIC records written for this repo to show the format (hook idea + QA outcome + lesson).
+#                 They are not results of real ads. Replace them with your own runs' outcomes.
+lessons:
+  - id: L01-audio-ends-early
+    title: Audio track ended 1.6 s before the picture
+    text: >-
+      The sidechain-ducked music followed the FX bus, and the FX bus ended with its last sound, so the whole audio
+      track stopped 1.6 s before the video. Pad the FX bus to the full ad length (apad whole_dur). Check: av_duration,
+      video and audio lengths within 0.1 s.
+  - id: L02-aac-true-peak
+    title: Built-in AAC encoder overshot true peak by 6.7 dB
+    text: >-
+      ffmpeg's built-in aac encoder pushed a limited master 6.7 dB over its true-peak ceiling. Prefer AudioToolbox
+      AAC on macOS, and measure true peak on the encoded file, not before encoding. Check: true_peak at or below
+      -2 dBTP on the delivered file.
+  - id: L03-shortest-cuts-video
+    title: -shortest cut the video to a short audio track
+    text: >-
+      Muxing with -shortest silently shortened the picture to the audio length. Never use -shortest; give every mux
+      and encode an explicit duration. Check: av_duration.
+  - id: L04-shared-temp-files
+    title: Parallel jobs corrupted each other's temp files
+    text: >-
+      Concepts rendered in parallel wrote the same temp file names. Give every job a private temp directory and every
+      paid generation a per-key lock. Check: concurrency tests.
+  - id: L05-veo-garbles-text
+    title: Video model copies text from the first frame and garbles it
+    text: >-
+      Veo copied a product label from the first frame and spelled it wrong (MILK became MIILAK). Blur every text region
+      of the real frame before generation (hook.text_regions) and never ask the image model to add text. Check: OCR on
+      the first frame and the hook; a near-miss of a known word fails.
+  - id: L06-tail-drift-and-fake-ui
+    title: Video model drifts in the last second and invents UI in the last three
+    text: >-
+      In the final ~1 s of an 8 s Veo clip a stylized mascot turned photoreal, and in the last ~3 s it drew fake UI.
+      Cut the hook at least 1 s before the end (default cut = duration - 1 s), cut mid-transition, or cover invented UI
+      with real pixels (hook.patches). Check: lint tail-drift / tail-ui, hook_landing.
+  - id: L07-hand-covers-ui
+    title: A hand or tool covering the UI made the model invent UI behind it
+    text: >-
+      When the added hand or tool covered the board or HUD, Veo had to guess what was behind it and invented fake UI.
+      The hand must enter from an edge or a corner and stay clear of the centre and the HUD. Check: lint
+      hand-enters-from-edge.
+  - id: L08-image-model-redraws-products
+    title: Image model redraws products when asked to cover the whole frame
+    text: >-
+      Asking Gemini to cover the whole board in dust or mud made it redraw the products underneath, so the board
+      changed when the effect was cleared and the hook no longer landed on the real frame. Paint dust, mud, frost or
+      darkening on the real frame in code (hook.effects); ask the image model only for the hand or tool. Check: lint
+      effects-programmatic, hook_landing.
+  - id: L09-24fps-judder
+    title: 24 fps video converted with a plain fps filter juddered
+    text: >-
+      Veo outputs 24 fps. A plain fps=60 conversion repeated frames and the motion juddered. Use motion-compensated
+      interpolation (minterpolate mci) to 60 fps, then an exact 2:1 drop to 30. Check: cadence, isolated repeated
+      frames at or below 2 %.
+  - id: L10-frozen-silent-intro
+    title: One ad opened on a frozen, silent first half second
+    text: >-
+      A hook started with 0.5 s of frozen picture and silence, which wastes the most valuable moment of the ad. Check:
+      intro_freeze (freezedetect) and intro_silence (silencedetect) on the first second.
+  - id: L11-hook-gameplay-loudness
+    title: Hook and gameplay loudness differed by +5 to -9 LU
+    text: >-
+      The AI hook and the real gameplay were mixed at very different loudness. One correction pass was not enough
+      because the limiter squashes transient gameplay SFX more than the smoother hook audio. Loop: measure after the
+      limiter and after encoding, correct, repeat. Check: hook_gameplay_loudness within 0.8 LU.
+  - id: L12-4x5-crop
+    title: The 4:5 feed variant must not crop gameplay
+    text: >-
+      Cropping 9:16 to 4:5 cut off the board. Put the full 9:16 frame in the centre and fill the sides with a blurred,
+      darkened copy. Check: format and a pixel test.
+  - id: L13-llm-judge-noise
+    title: A single LLM judge run is noise
+    text: >-
+      The same video scored 8 in one run and 4 in the next at temperature 0. Run the judge at least twice on shuffled,
+      code-named videos and report mean and spread per criterion; treat a wide spread as unstable, not as a verdict.
+  - id: L14-file-size-cap
+    title: Files must stay under the 30 MB cap
+    text: >-
+      Ad networks rejected large files. crf 20 with maxrate 3.6 Mbit/s, lowered automatically for longer ads, keeps a
+      60 s ad under 30 MB. Check: file_size.
+
+past_concepts:
+  - id: S01-dust-blower
+    synthetic: true
+    title: "Synthetic example: leaf blower clears a dusty board"
+    text: >-
+      Hook: an adult hand holding a leaf blower nozzle enters from the bottom right corner and blows grey dust off the
+      shelves, revealing bright colours; dust painted on the real frame in code, 8 s clip cut at 5.4 s. Outcome: all
+      technical checks passed, hook_landing mean 6. Lesson: an edge entry plus programmatic dust lands cleanly.
+  - id: S02-ice-pick-centre
+    synthetic: true
+    title: "Synthetic example: ice pick held over the centre of the board"
+    text: >-
+      Hook: a hand with an ice pick chips frost off the board, held over the middle of the screen. Outcome: the video
+      model drew a fake order bubble behind the hand in the last two seconds; rejected in review. Lesson: keep the hand
+      at an edge, away from the centre and the HUD.
+  - id: S03-mud-whole-frame-prompt
+    synthetic: true
+    title: "Synthetic example: image model asked to bury the whole board in mud"
+    text: >-
+      Hook: pressure washer clears mud; the image prompt asked the model to cover everything in mud. Outcome: products
+      were redrawn under the mud, hook_landing failed (mean 31). Lesson: paint the mud in code, ask only for the hand
+      and the washer.
+  - id: S04-late-cut-mascot
+    synthetic: true
+    title: "Synthetic example: cut at 7.7 s of an 8 s clip"
+    text: >-
+      Hook: mascot cheers as the board sparkles; the cut was placed at 7.7 s to keep the cheer. Outcome: the mascot
+      turned photoreal in the last second and the judge listed it as an AI artifact. Lesson: cut at least 1 s before
+      the end, ideally before the last 3 s.
+  - id: S05-satisfying-asmr
+    synthetic: true
+    title: "Synthetic example: satisfying cleaning ASMR with a chime on the reveal"
+    text: >-
+      Hook: pressure washing stripe by stripe with a hiss, splashes and a bright chime when the board is clean, then a
+      0.3 s crossfade into the same level's real gameplay. Outcome: judge hook_stop_power 8 and 7 across two runs;
+      loudness matched within 0.4 LU. Lesson: a clear before/after reveal with sound gives the hook a payoff.

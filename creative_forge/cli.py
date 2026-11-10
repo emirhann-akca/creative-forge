@@ -238,6 +238,45 @@ def cmd_publish(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ideate(a: argparse.Namespace) -> int:
+    from creative_forge.ideate.agent import VertexGeminiChat, offline_script, run_agent, summarize, write_spec
+    from creative_forge.ideate.library import HashingEmbedder, LibraryIndex, VertexTextEmbedder, load_library
+    from creative_forge.ideate.tools import Toolbox
+
+    settings = Settings.from_env()
+    client = None
+    if a.llm == "vertex" or a.embedder == "vertex":
+        from creative_forge.providers.vertex import VertexClient
+
+        client = VertexClient(settings.require_project())
+    embedder = VertexTextEmbedder(client, a.embed_location) if a.embedder == "vertex" else HashingEmbedder()
+    index = LibraryIndex(load_library(), embedder, settings.cache_dir / f"library-{embedder.name}.json")
+    embedded = index.build()
+    model = VertexGeminiChat(client, a.model, settings.genai_location) if a.llm == "vertex" else offline_script(a.n)
+    tools = Toolbox(index, [Path(c) for c in a.clips], Pricing.load(), a.n)
+    result = run_agent(model, tools, a.game, a.n, a.max_steps)
+
+    for t in result.trace:
+        print(f"step {t['step']}  {t['tool']}: {summarize(t['result'])}")
+    line = f"\n{model.name}: {model.requests} request(s)"
+    if result.usage.get("totalTokenCount"):
+        line += f", {result.usage['totalTokenCount']} tokens"
+    line += f"; library {embedder.name}: {embedded} entries embedded now"
+    if isinstance(embedder, VertexTextEmbedder):
+        line += f", {embedder.inputs} embedding inputs sent"
+    print(line)
+    if not result.accepted:
+        print(f"no accepted concept set after {result.steps} step(s); nothing written", file=sys.stderr)
+        return 1
+    header = [
+        f"Drafted by `forge ideate` ({model.name}, {model.requests} model requests, library {embedder.name}).",
+        "A draft, not a decision: review the prompts and cut points, and fill the TODOs before a paid run.",
+    ]
+    out = write_spec(result, Path(a.out), a.name, header)
+    print(f"spec: {out}  ({len(result.concepts)} concept(s); `forge plan {out}` for the cost)")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="forge", description="Spec-driven AI-hook video ad pipeline with QA.")
     p.add_argument("--version", action="version", version=f"creative-forge {__version__}")
@@ -281,6 +320,19 @@ def build_parser() -> argparse.ArgumentParser:
     sd.add_argument("--keep-work", action="store_true")
     sd.add_argument("--ocr", choices=["auto", "vision", "tesseract", "off"], default="auto")
     sd.set_defaults(fn=cmd_demo)
+
+    si = sub.add_parser("ideate", help="draft hook concepts as a spec with a tool-calling LLM and the lesson library")
+    si.add_argument("--game", required=True, help="short description of the game and the ad goal")
+    si.add_argument("--clips", nargs="+", required=True, help="real gameplay clips the concepts may use")
+    si.add_argument("--n", type=int, default=3, choices=range(1, 7), metavar="N", help="concepts to write (1-6)")
+    si.add_argument("--out", default="ideas.yaml")
+    si.add_argument("--name", default="ideas", help="spec name (lowercase, a-z0-9_-)")
+    si.add_argument("--llm", choices=["fake", "vertex"], default="fake", help="fake: scripted, offline")
+    si.add_argument("--model", default="gemini-2.5-flash")
+    si.add_argument("--embedder", choices=["hash", "vertex"], default="hash")
+    si.add_argument("--embed-location", default="us-central1")
+    si.add_argument("--max-steps", type=int, default=8, choices=range(1, 21), metavar="STEPS", help="1-20")
+    si.set_defaults(fn=cmd_ideate)
 
     sv = sub.add_parser("review", help="approve or reject each export of a run (interactive without flags)")
     sv.add_argument("run_dir", help="output directory of `forge run` (holds report.json)")
