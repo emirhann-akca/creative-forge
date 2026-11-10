@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Pipeline outputs and caches (generated media, paid generations)
+out/
+.forge-cache/
+.forge-work/
+*.mp4
+*.m4a
+*.wav
+*.mp3
+
+# Local configuration and secrets
+*.local.yaml
+.env
+.env.*
+
+# OS
+.DS_Store

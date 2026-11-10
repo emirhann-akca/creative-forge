@@ -1,0 +1,58 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "creative-forge"
+version = "0.1.0"
+description = "Spec-driven pipeline for AI-hooked mobile game video ads: Gemini image edit -> Veo image-to-video -> real gameplay -> mastered, QA-checked exports."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+authors = [{ name = "Emirhan Akça" }]
+keywords = ["video", "ads", "veo", "gemini", "ffmpeg", "loudness", "qa", "vertex-ai"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Video",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+]
+dependencies = [
+    "pydantic>=2.6",
+    "pyyaml>=6.0",
+    "requests>=2.31",
+    "google-auth>=2.27",
+    "pillow>=10.1",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.5"]
+
+[project.scripts]
+forge = "creative_forge.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["creative_forge"]
+
+[tool.hatch.build.targets.sdist]
+include = ["creative_forge", "tests", "examples", "docs", "README.md", "LICENSE"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = [".venv", "out"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+ignore = ["RUF001", "RUF002", "RUF003", "SIM108"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = [
+    "slow: end-to-end tests that render a full ad (still well under a minute)",
+]
