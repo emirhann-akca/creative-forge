@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import tempfile
+import threading
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -38,6 +39,14 @@ class Generator:
         self.pricing = pricing
         self.scratch = Path(scratch)
         self.scratch.mkdir(parents=True, exist_ok=True)
+        self._locks: dict[str, threading.Lock] = {}
+        self._locks_guard = threading.Lock()
+
+    def _lock(self, key: str) -> threading.Lock:
+        """One lock per cache key: two jobs asking for the same generation at once pay once (the second waits
+        and then hits the cache)."""
+        with self._locks_guard:
+            return self._locks.setdefault(key, threading.Lock())
 
     def _call(
         self,
@@ -52,6 +61,20 @@ class Generator:
         call: Callable[[Path], ProviderResult],
     ) -> list[Path]:
         key = content_key(f"{kind}:{provider.name}", payload)
+        with self._lock(key):
+            return self._call_locked(kind, key, provider, list_usd, detail, concept, model, call)
+
+    def _call_locked(
+        self,
+        kind: str,
+        key: str,
+        provider: Provider,
+        list_usd: float | None,
+        detail: str,
+        concept: str,
+        model: str,
+        call: Callable[[Path], ProviderResult],
+    ) -> list[Path]:
         hit = self.cache.get(kind, key)
         if hit is not None:
             self.ledger.record(

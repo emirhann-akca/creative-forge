@@ -1,0 +1,103 @@
+# A real-run spec, shaped like the October 2026 batch: an AI hook that lands on a real gameplay frame,
+# the same level's real gameplay, an end card, generated music. Footage paths are placeholders.
+#
+#   forge plan examples/ads.yaml                 # cost estimate + lint, no calls
+#   forge run examples/ads.yaml --dry-run        # also checks inputs and environment
+#   CREATIVE_FORGE_PROJECT=<your-project> forge run examples/ads.yaml --budget-usd 15
+version: 1
+name: puzzle-ads
+providers: vertex
+output_dir: out/puzzle-ads
+
+render:
+  width: 1080
+  height: 1920
+  fps: 30
+  crossfade_s: 0.3          # hook -> gameplay and gameplay -> end card
+  hook_interpolate_fps: 60  # Veo is 24 fps: mci to 60, then an exact 2:1 drop to 30
+
+export:
+  crf: 20
+  maxrate_kbps: 3600        # with crf 20 this kept a 60 s ad near 27 MB
+  max_file_mb: 30
+
+audio:
+  target_lufs: -14.3
+  true_peak_max_dbtp: -2.0
+  hook_gameplay_max_delta_lu: 0.8
+
+qa:
+  duration_s: [20, 35]
+  known_text: ["PLAY NOW", "LEVEL", "Fill every order!", "Not gameplay footage"]
+  judge_runs: 2
+
+concepts:
+  - id: dust-blower
+    gameplay:
+      path: footage/level_71.mp4      # simulator recording, 1206x2622
+      crop: [0, 150, 1206, 2144]      # drop the status bar; 1206x2144 is exactly 9:16
+      in_s: 7.6                       # this frame becomes Veo's lastFrame
+      out_s: 21.0
+    hook:
+      # The dust itself is painted on the real frame (effects); the model only adds the hand and tool.
+      image_prompt: >-
+        Edit this exact image. Keep every shelf, product, character and the basket bar exactly in the same
+        position and shape. Add a realistic adult human hand holding the black nozzle of a small electric leaf
+        blower, entering from the bottom right corner, pointed at the shelves. Same framing, vertical 9:16,
+        do not add any new text.
+      video_prompt: >-
+        Same scene as the first frame: a little game market board covered in thick grey dust and cobwebs, and a
+        real human hand holding a leaf blower nozzle at the bottom right. The hand sweeps the leaf blower from the
+        bottom right toward the top left; a powerful gust blasts the grey dust and cobwebs away in big billowing
+        clouds, revealing bright saturated colors underneath, shelf by shelf, until the whole board is clean,
+        colorful and shiny exactly as in the final frame, and the hand moves out of frame. The board, shelves
+        and items never move or change shape; only the dust flies. Sound: leaf blower roar, whoosh of dust,
+        then a bright sparkle chime when the colors appear.
+      duration_s: 8
+      audio: true
+      samples: 1
+      cut_s: 5.45                     # the hand has left; Veo starts to disturb the order bubble after this
+      effects:
+        - {type: dust, strength: 0.85}
+      text_regions:
+        - [380, 150, 700, 230]        # order-bubble label in output pixels; Veo garbles any text it sees
+      patches:
+        - {box: [515, 40, 915, 335], from_s: 4.8}   # cover the order bubble Veo redraws in its last second
+    end_card: {headline: "Fill every order!", button: "PLAY NOW", duration_s: 2.6}
+    music:
+      prompt: "Bright, bouncy casual puzzle game music, marimba and plucked strings, 118 bpm, no vocals"
+      volume_db: -19
+      start_offset_s: 2.5             # music reaches full level as the gameplay appears
+    formats: ["9:16", "4:5"]
+
+  - id: pressure-wash
+    gameplay:
+      path: footage/level_21.mp4
+      crop: [0, 150, 1206, 2144]
+      in_s: 9.0
+      out_s: 22.5
+    hook:
+      image_prompt: >-
+        Edit this exact image. Keep the layout of every shelf, product, the customer at the top and the bottom
+        basket bar exactly in the same position, size and shape. Add a realistic adult human hand holding the
+        yellow-and-black pistol grip of a pressure washer with a long metal lance, entering from the bottom right
+        corner, aiming at the board. Same framing, vertical 9:16, do not add any text.
+      video_prompt: >-
+        Satisfying pressure washing ASMR, same scene as the first frame: a game board buried under thick brown
+        mud and a real hand holding a pressure washer. The hand sweeps a powerful jet of water back and forth
+        from bottom to top; the mud blasts away in thick splashes and the spray leaves clean, bright, glossy
+        colors behind it, stripe by stripe, until the whole board is spotless and looks exactly like the final
+        frame, and the hand and lance move out of frame. The shelves, products and layout never move or change
+        shape; only the mud and water move. Sound: loud pressure washer hiss, splashing water, a bright sparkle
+        chime when it is clean.
+      duration_s: 8
+      cut_s: 5.6
+      effects:
+        - {type: mud, strength: 0.9}
+      text_regions:
+        - [380, 150, 700, 230]
+    music:
+      prompt: "Clean, satisfying upbeat pop instrumental for a puzzle game ad, light percussion, no vocals"
+      volume_db: -19
+      start_offset_s: 2.4
+    formats: ["9:16", "4:5"]
