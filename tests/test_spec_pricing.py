@@ -64,6 +64,13 @@ def test_defaults_are_production_values():
         (lambda d: d.update(render={"width": 1920, "height": 1080}), "portrait"),
         (lambda d: d.update(typo_key=1), "typo_key"),
         (lambda d: d["concepts"][0]["hook"].update(patches=[{"box": [0, 0, 5000, 10], "from_s": 1}]), "patch"),
+        # names become output file names, model ids become REST URL path segments
+        (lambda d: d.update(name="../../elsewhere"), "name"),
+        (lambda d: d.update(models={"video": "veo/../../other:predict"}), "video"),
+        # caught at load time, not after the paid generations
+        (lambda d: d.update(export={"preset": "slwo"}), "preset"),
+        (lambda d: d["concepts"][0]["hook"].update(text_regions=[[50, 10, 20, 30]]), "text_regions"),
+        (lambda d: d["concepts"][0]["gameplay"].update(crop=[0, 150, 0, 2144]), "crop"),
     ],
 )
 def test_invalid_specs_are_rejected(mutate, msg):

@@ -98,7 +98,7 @@ def check_judge(
     agg: JudgeAggregate, min_runs: int = 2, unstable_stdev: float = 1.0, min_overall: float | None = None
 ) -> CheckResult:
     threshold = f">= {min_runs} runs, stdev <= {unstable_stdev:g}" + (
-        f", overall >= {min_overall:g}" if min_overall else ""
+        f", overall >= {min_overall:g}" if min_overall is not None else ""
     )
     if agg.runs == 0:
         return CheckResult(

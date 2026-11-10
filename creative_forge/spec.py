@@ -14,6 +14,12 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 FormatName = Literal["9:16", "4:5"]
 Box = tuple[int, int, int, int]
+# Passed to ffmpeg as-is. A typo in export.preset used to fail only at export, after the paid generations.
+X264Preset = Literal["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow"]
+# Model IDs end up in REST URL paths (.../models/{id}:method), so they must be plain identifiers.
+ModelId = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9._@-]{0,127}$")]
+# Names and ids become output file names: no separators, no "..".
+SafeName = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")]
 
 # Negative prompt sent with every Veo request in production.
 DEFAULT_VEO_NEGATIVE = (
@@ -26,13 +32,20 @@ class _Model(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+def _corners(box: Box, what: str) -> Box:
+    x0, y0, x1, y1 = box
+    if x1 <= x0 or y1 <= y0 or x0 < 0 or y0 < 0:
+        raise ValueError(f"{what} must be (x0, y0, x1, y1) with x1 > x0 >= 0 and y1 > y0 >= 0")
+    return box
+
+
 class Models(_Model):
     """Model IDs. They are configuration, not code: check them against the Vertex AI model garden."""
 
-    image_edit: str = "gemini-3-pro-image-preview"
-    video: str = "veo-3.1-generate-001"
-    music: str = "lyria-3-pro-preview"
-    judge: str = "gemini-3.1-pro-preview"
+    image_edit: ModelId = "gemini-3-pro-image-preview"
+    video: ModelId = "veo-3.1-generate-001"
+    music: ModelId = "lyria-3-pro-preview"
+    judge: ModelId = "gemini-3.1-pro-preview"
 
 
 class RenderSpec(_Model):
@@ -43,7 +56,7 @@ class RenderSpec(_Model):
     # Veo returns 24 fps. Motion-compensated interpolation to 60 fps, then an exact 2:1 drop to 30 fps.
     hook_interpolate_fps: int = Field(60, ge=24, le=120)
     intermediate_crf: int = Field(12, ge=0, le=30)
-    preset: str = "medium"
+    preset: X264Preset = "medium"
 
     @field_validator("width", "height")
     @classmethod
@@ -56,7 +69,7 @@ class RenderSpec(_Model):
 class ExportSpec(_Model):
     crf: int = Field(20, ge=0, le=40)
     maxrate_kbps: int = Field(3600, ge=200)
-    preset: str = "slow"
+    preset: X264Preset = "slow"
     audio_bitrate_kbps: int = Field(192, ge=64, le=320)
     max_file_mb: float = Field(30.0, gt=0)
 
@@ -134,6 +147,9 @@ class GameplaySpec(_Model):
     def _span(self) -> GameplaySpec:
         if self.out_s <= self.in_s:
             raise ValueError("gameplay.out_s must be greater than gameplay.in_s")
+        if self.crop is not None:
+            x, y, w, h = self.crop
+            _corners((x, y, x + w, y + h), "gameplay.crop (x, y, w, h)")
         return self
 
     @property
@@ -158,9 +174,7 @@ class Patch(_Model):
 
     @model_validator(mode="after")
     def _box(self) -> Patch:
-        x0, y0, x1, y1 = self.box
-        if x1 <= x0 or y1 <= y0 or x0 < 0 or y0 < 0:
-            raise ValueError("patch.box must be (x0, y0, x1, y1) with x1 > x0 >= 0 and y1 > y0 >= 0")
+        _corners(self.box, "patch.box")
         return self
 
 
@@ -189,6 +203,8 @@ class HookSpec(_Model):
             raise ValueError(f"hook.cut_s must be within [0.5, {self.duration_s}]")
         if self.cut_s is None and self.duration_s - self.tail_trim_s < 0.5:
             raise ValueError("hook.tail_trim_s leaves less than 0.5 s of hook")
+        for box in self.text_regions:
+            _corners(box, "hook.text_regions entry")
         return self
 
     @property
@@ -228,7 +244,7 @@ class EndCardSpec(_Model):
 
 
 class Concept(_Model):
-    id: Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")]
+    id: SafeName
     gameplay: GameplaySpec
     hook: HookSpec
     end_card: EndCardSpec = Field(default_factory=EndCardSpec)
@@ -246,7 +262,7 @@ class Concept(_Model):
 
 class AdSpec(_Model):
     version: Literal[1] = 1
-    name: str
+    name: SafeName
     providers: Literal["vertex", "fake"] = "vertex"
     output_dir: Path = Path("out")
     models: Models = Field(default_factory=Models)

@@ -87,6 +87,11 @@ class ProviderResult:
 class Provider(ABC):  # noqa: B024 - shared attributes only; each kind below declares its abstract method
     name: str = "provider"
     billable: bool = True
+    local: bool = False  # runs on this machine (e.g. ComfyUI): no list price, nothing to simulate
+
+    def cache_params(self) -> dict[str, Any]:
+        """Provider-side settings that change the output and so belong in the cache key."""
+        return {}
 
 
 class ImageEditProvider(Provider):

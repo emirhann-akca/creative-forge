@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import shutil
 import tempfile
+import threading
 import time
 import traceback
 from collections.abc import Callable
@@ -136,13 +137,16 @@ class Pipeline:
         self._ocr_pref = ocr
         self._ocr: OcrBackend | None = None
         self._ocr_ready = False
+        self._ocr_lock = threading.Lock()
 
     @property
     def ocr(self) -> OcrBackend | None:
-        if not self._ocr_ready:
-            self._ocr = None if self._ocr_pref == "off" else detect_backend(self._ocr_pref)
-            self._ocr_ready = True
-        return self._ocr
+        """Detected on first use; concept threads share one backend (the Vision helper is compiled once)."""
+        with self._ocr_lock:
+            if not self._ocr_ready:
+                self._ocr = None if self._ocr_pref == "off" else detect_backend(self._ocr_pref)
+                self._ocr_ready = True
+            return self._ocr
 
     # ---------------------------------------------------------------------------------------------------- one concept
     def run_concept(self, c: Concept) -> ConceptResult:
@@ -338,6 +342,9 @@ class Pipeline:
     # ---------------------------------------------------------------------------------------------------- batch
     def run(self, only: list[str] | None = None) -> RunResult:
         t0 = time.time()
+        unknown = sorted(set(only or []) - {c.id for c in self.spec.concepts})
+        if unknown:  # a typo here used to produce an empty, "successful" run
+            raise ValueError(f"--only: no concept with id {', '.join(unknown)} in {self.spec.name}")
         concepts = [c for c in self.spec.concepts if not only or c.id in only]
         plan = estimate(self.spec, self.pricing, self.judge_runs)
         issues = lint(self.spec)

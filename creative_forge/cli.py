@@ -103,6 +103,9 @@ def cmd_run(a: argparse.Namespace) -> int:
     except BudgetExceeded as e:
         print(f"budget guard: {e}", file=sys.stderr)
         return 3
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
     html_path, _ = write_report(rr)
     for c in rr.concepts:
         if c.error:
@@ -134,7 +137,7 @@ def cmd_qa(a: argparse.Namespace) -> int:
             timeline["gameplay_end"] = a.gameplay_end
     ocr = None if a.ocr == "off" else detect_backend(a.ocr)
     all_checks: dict[str, list[dict]] = {}
-    status = Status.PASS
+    failed = False
     for v in a.videos:
         vp = Path(v)
         t = dict(timeline) if timeline else None
@@ -147,10 +150,10 @@ def cmd_qa(a: argparse.Namespace) -> int:
             checks.append(_judge_one(vp, base, a))
         _print_checks(str(vp), checks)
         all_checks[str(vp)] = [c.to_dict() for c in checks]
-        status = worst([CheckResult("", status, None, ""), CheckResult("", worst(checks), None, "")])
+        failed = failed or worst(checks) is Status.FAIL
     if a.json:
         Path(a.json).write_text(json.dumps(all_checks, indent=2), encoding="utf-8")
-    return 1 if status is Status.FAIL else 0
+    return 1 if failed else 0
 
 
 def _judge_one(video: Path, spec: AdSpec, a: argparse.Namespace) -> CheckResult:

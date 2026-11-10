@@ -293,7 +293,8 @@ class VertexLyriaProvider(MusicProvider):
 
 def parse_judge_response(d: dict[str, Any]) -> dict[str, Any]:
     if "error" in d:
-        return {"error": str(d["error"].get("message", d["error"]))[:300]}
+        err = d["error"]
+        return {"error": str(err.get("message", err) if isinstance(err, dict) else err)[:300]}
     try:
         parts = d["candidates"][0]["content"]["parts"]
     except (KeyError, IndexError):

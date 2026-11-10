@@ -224,6 +224,10 @@ def test_judge_body_and_parse(tmp_path, good_video):
     assert len(sent) < good_video.stat().st_size * 2 and sent[4:8] == b"ftyp"  # downscaled MP4 was sent
 
 
+def test_judge_error_payload_may_be_a_plain_string():
+    assert parse_judge_response({"error": "quota exceeded"}) == {"error": "quota exceeded"}
+
+
 def test_vertex_needs_a_project():
     with pytest.raises(ConfigError, match="CREATIVE_FORGE_PROJECT"):
         build_providers("vertex", Settings(project=None))

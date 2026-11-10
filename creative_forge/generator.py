@@ -42,6 +42,12 @@ class Generator:
         self._locks: dict[str, threading.Lock] = {}
         self._locks_guard = threading.Lock()
 
+    @staticmethod
+    def key(kind: str, provider: Provider, payload: dict[str, Any]) -> str:
+        """Provider name and provider-side settings (e.g. a local checkpoint's sampler) are part of the key."""
+        extra = provider.cache_params()
+        return content_key(f"{kind}:{provider.name}", {**payload, "provider": extra} if extra else payload)
+
     def _lock(self, key: str) -> threading.Lock:
         """One lock per cache key: two jobs asking for the same generation at once pay once (the second waits
         and then hits the cache)."""
@@ -59,8 +65,9 @@ class Generator:
         concept: str,
         model: str,
         call: Callable[[Path], ProviderResult],
+        key: str | None = None,
     ) -> list[Path]:
-        key = content_key(f"{kind}:{provider.name}", payload)
+        key = key or self.key(kind, provider, payload)
         with self._lock(key):
             return self._call_locked(kind, key, provider, list_usd, detail, concept, model, call)
 
@@ -75,6 +82,8 @@ class Generator:
         model: str,
         call: Callable[[Path], ProviderResult],
     ) -> list[Path]:
+        if provider.local:
+            list_usd = 0.0  # runs on this machine: no list price to simulate or save
         hit = self.cache.get(kind, key)
         if hit is not None:
             self.ledger.record(
@@ -96,6 +105,8 @@ class Generator:
         try:
             with tempfile.TemporaryDirectory(prefix=f"{kind}-", dir=self.scratch) as td:
                 result = call(Path(td))
+                if result.info.get("resumed"):
+                    detail += " (resumed operation)"
                 files = self.cache.put(
                     kind,
                     key,
@@ -126,20 +137,23 @@ class Generator:
 
     def video(self, req: VideoRequest, concept: str) -> list[Path]:
         p = self.providers.video
-        key = content_key(f"video:{p.name}", req.cache_payload())
-        pending = self.cache.pending("video", key)
+        key = self.key("video", p, req.cache_payload())
 
         def call(d: Path) -> ProviderResult:
-            return p.generate(
+            # Read under the key lock: a job that waited on the lock must see the operation the previous holder
+            # submitted (and maybe failed to finish), not the state from before it started waiting.
+            operation = (self.cache.pending("video", key) or {}).get("operation")
+            result = p.generate(
                 req,
                 d,
-                operation=(pending or {}).get("operation"),
+                operation=operation,
                 on_submitted=lambda op: self.cache.set_pending("video", key, {"operation": op}),
             )
+            if operation:
+                result.info["resumed"] = True
+            return result
 
         detail = f"{req.sample_count} x {req.duration_s}s {'with' if req.generate_audio else 'no'} audio"
-        if pending:
-            detail += " (resumed operation)"
         return self._call(
             kind="video",
             payload=req.cache_payload(),
@@ -149,6 +163,7 @@ class Generator:
             concept=concept,
             model=req.model,
             call=call,
+            key=key,
         )
 
     def music(self, req: MusicRequest, concept: str) -> Path:

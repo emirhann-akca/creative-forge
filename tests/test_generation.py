@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -104,6 +106,33 @@ def test_pending_operation_is_resumed_not_resubmitted(tmp_path, frame):
     meta = json.loads((files[0].parent / "meta.json").read_text())
     assert meta["info"]["operation"] == "projects/x/operations/resume-me"
     assert "resumed" in gen.ledger.entries[0].detail
+
+
+def test_pending_operation_is_read_after_waiting_for_the_key_lock(tmp_path, frame):
+    """Job B waits while job A holds the key; A submits, then dies before finishing. B must resume A's operation
+    instead of submitting (and paying for) a second one."""
+    gen = make_gen(tmp_path)
+    req = VideoRequest("v", frame, "veo", duration_s=4, generate_audio=False)
+    key = content_key("video:fake-video", req.cache_payload())
+    lock = gen._lock(key)
+    lock.acquire()  # job A is inside the lock
+    results: list[list[Path]] = []
+    job_b = threading.Thread(target=lambda: results.append(gen.video(req, "b")))
+    job_b.start()
+    time.sleep(0.3)  # B is now blocked on the key lock
+    gen.cache.set_pending("video", key, {"operation": "projects/x/operations/from-job-a"})  # A submitted, then died
+    lock.release()
+    job_b.join(10)
+    meta = json.loads((results[0][0].parent / "meta.json").read_text())
+    assert meta["info"]["operation"] == "projects/x/operations/from-job-a"
+
+
+def test_cache_hit_is_not_labelled_as_a_resume(tmp_path, frame):
+    gen = make_gen(tmp_path)
+    req = VideoRequest("v", frame, "veo", duration_s=4, generate_audio=False)
+    gen.video(req, "c1")
+    gen.video(req, "c1")  # pending.json stays in the entry after success; this is a plain cache hit
+    assert [e.detail for e in gen.ledger.entries] == ["1 x 4s no audio", "1 x 4s no audio (cache hit)"]
 
 
 def test_operation_name_is_persisted_on_submit(tmp_path, frame):

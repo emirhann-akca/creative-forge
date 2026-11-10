@@ -32,6 +32,16 @@ def test_dry_run_makes_no_calls_and_reports_problems(capsys, monkeypatch):
     assert "dry run: no generation calls were made" in out
 
 
+def test_unknown_only_id_is_an_error_not_an_empty_run(tmp_path, capsys):
+    spec = tmp_path / "s.yaml"
+    spec.write_text(
+        "name: t\nproviders: fake\noutput_dir: out\nconcepts:\n"
+        "  - {id: c1, gameplay: {path: g.mp4, in_s: 0, out_s: 10}, hook: {video_prompt: v}}\n"
+    )
+    assert main(["run", str(spec), "--only", "c2"]) == 2
+    assert "no concept with id c2" in capsys.readouterr().err
+
+
 def test_qa_command_on_a_defective_file(short_audio_video, tmp_path, capsys):
     report = tmp_path / "qa.json"
     code = main(["qa", str(short_audio_video), "--ocr", "off", "--json", str(report)])
