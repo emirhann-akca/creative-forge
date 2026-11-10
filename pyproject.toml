@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "creative-forge"
-version = "0.1.0"
+version = "0.2.0"
 description = "Spec-driven pipeline for AI-hooked mobile game video ads: Gemini image edit -> Veo image-to-video -> real gameplay -> mastered, QA-checked exports."
 readme = "README.md"
 license = "MIT"
@@ -16,9 +16,15 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Multimedia :: Video",
+    "Operating System :: OS Independent",
+    "Operating System :: Microsoft :: Windows :: Windows 10",
+    "Operating System :: Microsoft :: Windows :: Windows 11",
     "Operating System :: MacOS",
     "Operating System :: POSIX :: Linux",
+    "Environment :: Console",
+    "Environment :: Web Environment",
 ]
 dependencies = [
     "pydantic>=2.6",
@@ -27,10 +33,19 @@ dependencies = [
     "google-auth>=2.27",
     "pillow>=10.1",
     "numpy>=1.26",
+    "platformdirs>=4.2",
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "jinja2>=3.1.5",
+    "python-multipart>=0.0.18",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "ruff>=0.5"]
+# RapidOCR: PP-OCR models on onnxruntime, the default OCR backend on Windows and Linux (models ship in the wheel).
+ocr = ["rapidocr>=3.10,<4", "onnxruntime>=1.20"]
+# httpx2 (or httpx with older Starlette) is what FastAPI's TestClient runs on; the annotate plugin turns failing tests
+# into GitHub check annotations, readable without signing in.
+dev = ["pytest>=8.0", "ruff>=0.5", "httpx>=0.27", "httpx2>=2.0", "pytest-github-actions-annotate-failures>=0.4"]
 
 [project.scripts]
 forge = "creative_forge.cli:main"
@@ -39,7 +54,7 @@ forge = "creative_forge.cli:main"
 packages = ["creative_forge"]
 
 [tool.hatch.build.targets.sdist]
-include = ["creative_forge", "tests", "examples", "docs", "README.md", "LICENSE"]
+include = ["creative_forge", "tests", "examples", "docs", "README.md", "LICENSE", "install.sh", "install.ps1"]
 
 [tool.ruff]
 line-length = 120
@@ -53,6 +68,12 @@ ignore = ["RUF001", "RUF002", "RUF003", "SIM108"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+# CI runs `python -X warn_default_encoding -W error::EncodingWarning -m pytest`: locale-dependent text I/O anywhere in our
+# code fails a test on every OS. These ini filters sit above that one; the modules below open their own ASCII files
+# without an encoding, which is not ours to fix.
+filterwarnings = [
+    "ignore::EncodingWarning:cv2.*",
+]
 markers = [
     "slow: end-to-end tests that render a full ad (still well under a minute)",
 ]

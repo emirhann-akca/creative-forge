@@ -36,7 +36,8 @@ def test_unknown_only_id_is_an_error_not_an_empty_run(tmp_path, capsys):
     spec = tmp_path / "s.yaml"
     spec.write_text(
         "name: t\nproviders: fake\noutput_dir: out\nconcepts:\n"
-        "  - {id: c1, gameplay: {path: g.mp4, in_s: 0, out_s: 10}, hook: {video_prompt: v}}\n"
+        "  - {id: c1, gameplay: {path: g.mp4, in_s: 0, out_s: 10}, hook: {video_prompt: v}}\n",
+        encoding="utf-8",
     )
     assert main(["run", str(spec), "--only", "c2"]) == 2
     assert "no concept with id c2" in capsys.readouterr().err
@@ -46,7 +47,7 @@ def test_qa_command_on_a_defective_file(short_audio_video, tmp_path, capsys):
     report = tmp_path / "qa.json"
     code = main(["qa", str(short_audio_video), "--ocr", "off", "--json", str(report)])
     assert code == 1
-    data = json.loads(report.read_text())
+    data = json.loads(report.read_text(encoding="utf-8"))
     checks = {c["check"]: c for c in next(iter(data.values()))}
     assert checks["av_duration"]["status"] == "fail"
     assert checks["seam"]["status"] == "skip"  # no timeline given
@@ -63,7 +64,9 @@ def test_demo_end_to_end(tmp_path):
         [(c.concept, [(x.check, x.status.value, x.message) for e in c.exports for x in e.checks]) for c in rr.concepts]
     )
     html, js = write_report(rr)
-    assert "Cost ledger" in html.read_text() and "data:image/jpeg;base64," in html.read_text()
+    assert "Cost ledger" in html.read_text(encoding="utf-8") and "data:image/jpeg;base64," in html.read_text(
+        encoding="utf-8"
+    )
 
     exports = [e for c in rr.concepts for e in c.exports]
     assert {e.format for e in exports} == {"9:16", "4:5"} and len(exports) == 4
@@ -87,4 +90,4 @@ def test_demo_end_to_end(tmp_path):
     again = run_demo(tmp_path / "demo", log=lambda _: None)
     gen = [e for e in again.ledger.entries if e.stage in ("image_edit", "video", "music")]
     assert gen and all(e.cached for e in gen)
-    assert json.loads(js.read_text())["concepts"][0]["exports"][0]["format"] == "9:16"
+    assert json.loads(js.read_text(encoding="utf-8"))["concepts"][0]["exports"][0]["format"] == "9:16"

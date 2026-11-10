@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block body %}
+<section>
+  <h1>Runs</h1>
+  <p class="muted">Every folder under <code>{{ root }}</code> that holds a <code>report.json</code>.</p>
+  {% if runs %}
+  <table>
+    <thead><tr><th>Run</th><th>QA</th><th>Exports</th><th>Approved</th></tr></thead>
+    <tbody>
+    {% for r in runs %}
+      <tr>
+        <td><a href="/runs/{{ r.rid }}">{{ r.rid }}</a></td>
+        <td><span class="badge {{ r.status }}">{{ r.status }}</span></td>
+        <td>{{ r.exports|length }}</td>
+        <td>{{ r.approved }} / {{ r.exports|length }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>No runs yet. Start the offline demo below, or run <code>forge run your-spec.yaml</code>.</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Offline demo</h2>
+  <p class="muted">Runs <code>forge demo</code> with fake providers: no keys, no cost, about 15 s.</p>
+  {% include "_demo.html" %}
+</section>
+
+<section>
+  <h2>Setup</h2>
+  <div hx-get="/doctor?partial=1" hx-trigger="load" hx-swap="outerHTML">
+    <p class="muted">checking ffmpeg, OCR and folders...</p>
+  </div>
+</section>
+{% endblock %}

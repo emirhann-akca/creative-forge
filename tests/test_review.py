@@ -45,14 +45,14 @@ def run_dir(tmp_path: Path) -> Path:
             },
         ],
     }
-    (run / "report.json").write_text(json.dumps(report))
+    (run / "report.json").write_text(json.dumps(report), encoding="utf-8")
     return run
 
 
 def test_only_approved_exports_are_published_with_a_manifest(run_dir, tmp_path):
     decide(run_dir, "t_a_9x16.mp4", "approve", "hook reads well", "ayse", T)
     decide(run_dir, "t_b_9x16.mp4", "reject", "peak clips on the chime", "ayse", T)
-    manifest = json.loads(publish(run_dir, tmp_path / "deliver", now=T).read_text())
+    manifest = json.loads(publish(run_dir, tmp_path / "deliver", now=T).read_text(encoding="utf-8"))
 
     assert sorted(p.name for p in (tmp_path / "deliver").iterdir()) == ["manifest.json", "t_a_9x16.mp4"]
     (entry,) = manifest["exports"]
@@ -70,7 +70,9 @@ def test_failed_qa_blocks_publishing_until_overridden_with_a_reason(run_dir, tmp
     with pytest.raises(ReviewError, match="needs a reason"):
         publish(run_dir, tmp_path / "deliver", override="  ")
 
-    manifest = json.loads(publish(run_dir, tmp_path / "deliver", override="network re-encodes audio").read_text())
+    manifest = json.loads(
+        publish(run_dir, tmp_path / "deliver", override="network re-encodes audio").read_text(encoding="utf-8")
+    )
     assert manifest["override_reason"] == "network re-encodes audio"
     assert manifest["exports"][0]["overridden"] and manifest["exports"][0]["failed_checks"] == ["true_peak"]
 
@@ -94,9 +96,9 @@ def test_decisions_are_validated(run_dir):
 
 
 def test_hand_edited_report_cannot_point_outside_the_run(run_dir, tmp_path):
-    report = json.loads((run_dir / "report.json").read_text())
+    report = json.loads((run_dir / "report.json").read_text(encoding="utf-8"))
     report["concepts"][0]["exports"][0]["file"] = "../secret.mp4"
-    (run_dir / "report.json").write_text(json.dumps(report))
+    (run_dir / "report.json").write_text(json.dumps(report), encoding="utf-8")
     with pytest.raises(ReviewError, match="unsafe file name"):
         publish(run_dir, tmp_path / "deliver")
 

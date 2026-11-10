@@ -1,0 +1,12 @@
+# Text is stored with LF; Windows checkouts keep LF too, so shell scripts and fixtures read the same everywhere.
+* text=auto eol=lf
+*.sh text eol=lf
+*.ps1 text eol=crlf
+
+*.mp4 binary
+*.m4a binary
+*.wav binary
+*.png binary
+*.jpg binary
+*.onnx binary
+*.zip binary

@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}{{ run.rid }} - creative-forge{% endblock %}
+{% block body %}
+<section>
+  <h1>{{ run.rid }} <span class="badge {{ run.status }}">{{ run.status }}</span></h1>
+  <p>
+    {% if has_report %}<a href="/runs/{{ run.rid }}/report.html" target="_blank" rel="noopener">Open the QA report</a> &middot; {% endif %}
+    <span class="muted">{{ run.path }}</span>
+  </p>
+  <p class="muted">A decision is stored in <code>review.json</code> with the file's SHA-256; a re-render voids it.
+    Publishing stays on the command line: <code>forge publish "{{ run.path }}" --to deliver</code>
+    (refuses approved exports with failed checks unless you give <code>--override "reason"</code>).</p>
+</section>
+{% for e in run.exports %}
+  {% set d = run.decisions.get(e.file, {}) %}
+  {% set error = None %}
+  {% include "_export.html" %}
+{% endfor %}
+{% endblock %}

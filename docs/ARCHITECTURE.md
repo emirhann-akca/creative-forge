@@ -19,6 +19,11 @@
 | `pipeline.py` | One job per concept in a private temp dir, a thread pool across concepts, then the blind judge. |
 | `report.py` | Self-contained HTML (inline CSS, base64 contact sheets) and a JSON twin. |
 | `review.py` | Human decisions per export (`review.json`, keyed to file SHA-256) and the publish gate with its manifest. |
+| `ffmpeg.py` | The one place that decides which ffmpeg/ffprobe run (`CREATIVE_FORGE_FFMPEG_DIR`, the managed build, `PATH`), probes a build's features, picks the best AAC encoder that actually opens (`aac_at`, `aac_mf`, `aac`), and decodes every tool output as UTF-8. |
+| `setup_ffmpeg.py` | `forge setup ffmpeg`: the pinned 9.0.2 builds per platform (URL, size, SHA-256), verified download, extraction of named members only, feature probe before activation, one-rename swap. |
+| `doctor.py` | `forge doctor`: ffmpeg, OCR, folders, optional ComfyUI and ADC presence as `ok/warn/fail/info` items; text or JSON. |
+| `paths.py`, `fsutil.py` | platformdirs locations (`CREATIVE_FORGE_HOME` overrides) and renames/deletes that retry while Windows reports a sharing violation. |
+| `ui/` | `forge ui`: FastAPI + Jinja2 + vendored htmx. Runs list, report, range-request players, approve/reject through `review.decide`, background demo, doctor. Loopback `Host` check and a per-process token on every POST. |
 | `ideate/` | `library.py`: lesson library, hashing or Vertex embedder, JSON vector index. `tools.py`: function declarations and their local implementations. `agent.py`: the function-calling loop, the Vertex chat model and the scripted one. |
 
 ## One concept, step by step

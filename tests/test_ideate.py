@@ -149,7 +149,7 @@ def test_written_spec_loads_and_points_at_the_clips(tools, good_video, tmp_path)
     spec = load_spec(out)
     assert [c.id for c in spec.concepts] == ["dust-blower", "pressure-wash"]
     assert spec.resolve(spec.concepts[0].gameplay.path).resolve() == good_video.resolve()
-    assert "TODO strip-text" in out.read_text()
+    assert "TODO strip-text" in out.read_text(encoding="utf-8")
 
 
 def test_ideate_command_offline(good_video, tmp_path, monkeypatch, capsys):

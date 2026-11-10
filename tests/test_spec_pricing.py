@@ -91,7 +91,7 @@ def test_timeline_math():
 
 def test_load_spec_rejects_non_mapping(tmp_path):
     p = tmp_path / "bad.yaml"
-    p.write_text("- just a list\n")
+    p.write_text("- just a list\n", encoding="utf-8")
     with pytest.raises(ValueError, match="mapping"):
         load_spec(p)
 
@@ -120,10 +120,10 @@ def test_cost_estimate():
 
 
 def test_silent_video_and_override_pricing(tmp_path):
-    d = yaml.safe_load(resources.files("creative_forge.data").joinpath("pricing.yaml").read_text())
+    d = yaml.safe_load(resources.files("creative_forge.data").joinpath("pricing.yaml").read_text(encoding="utf-8"))
     d["judge"]["per_call"] = 0.05
     f = tmp_path / "pricing.local.yaml"
-    f.write_text(yaml.safe_dump(d))
+    f.write_text(yaml.safe_dump(d), encoding="utf-8")
     p = Pricing.load(f)
     assert p.judge(2) == pytest.approx(0.10)
     assert p.video(8, 1, audio=False) == pytest.approx(1.6)

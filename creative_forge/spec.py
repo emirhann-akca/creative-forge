@@ -100,7 +100,7 @@ class AudioSpec(_Model):
     ramp_s: float = Field(0.4, gt=0)
     max_iterations: int = Field(6, ge=1, le=20)
     gameplay_skip_s: float = Field(0.6, ge=0)
-    encoder: Literal["auto", "aac_at", "aac"] = "auto"
+    encoder: Literal["auto", "aac_at", "aac_mf", "aac"] = "auto"  # auto: aac_at, then aac_mf, then aac
     sample_rate: int = 48000
     # Mix stage (sidechain ducking of music under hook/gameplay sound)
     duck_threshold: float = 0.05

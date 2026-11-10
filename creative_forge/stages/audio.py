@@ -6,7 +6,7 @@ import math
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from creative_forge.ffmpeg import aac_encoder, probe, run
+from creative_forge.ffmpeg import aac_bitrate, aac_encoder, probe, run
 from creative_forge.loudness import measure
 from creative_forge.spec import SFX, AudioSpec
 
@@ -147,6 +147,7 @@ def master(
     hook/gameplay difference after limiting is not the difference you corrected before it. The loop measures after
     the limiter and after encoding, and corrects again (production: up to 6 rounds to reach <= 0.8 LU)."""
     enc = aac_encoder(a.encoder)
+    bitrate_kbps = aac_bitrate(enc, bitrate_kbps)  # Media Foundation AAC takes 96/128/160/192 kbps only
     g0, g1 = gameplay_window
     hook0 = _finite(measure(src, 0.0, hook_end).integrated_lufs, -70.0)
     game0 = _finite(measure(src, g0, g1).integrated_lufs, -70.0)

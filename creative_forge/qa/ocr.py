@@ -4,26 +4,41 @@ Veo copies text it sees in the first frame and garbles it ("MILK" became "MIILAK
 the first frame, and this check reads the hook back: any word close to (but not equal to) a word the game really
 shows is reported as garbled; any other word in an AI shot is reported as unexpected.
 
-Backends, in order: macOS Vision (compiled once from ``ocr_vision.swift``), then ``tesseract``. With neither, the
-check returns an explicit ``skip`` result with the reason; it never passes silently.
+Backends (``--ocr auto`` tries them in this order):
+
+* macOS: Apple Vision (compiled once from ``ocr_vision.swift`` with ``swiftc``), then RapidOCR, then tesseract;
+* Windows and Linux: RapidOCR (``creative-forge[ocr]``: PP-OCR models on onnxruntime, shipped inside the wheel,
+  no download at run time), then tesseract.
+
+Every result records the backend that read the frames. With no backend, the check returns an explicit ``skip`` with
+the reason; it never passes silently.
 """
 
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
 
 from PIL import Image
 
+from creative_forge import fsutil
 from creative_forge.ffmpeg import run
+from creative_forge.paths import cache_dir as tool_cache_dir
 from creative_forge.qa.result import CheckResult, Status, skipped
+
+BACKENDS = ("vision", "rapidocr", "tesseract")
+NO_BACKEND = (
+    "no OCR backend available: install creative-forge[ocr] (RapidOCR) or tesseract; on macOS, Vision needs swiftc"
+)
 
 NormBox = tuple[float, float, float, float]  # x0, y0, x1, y1 as fractions of the frame, top-left origin
 
@@ -64,7 +79,7 @@ class VisionOcr(OcrBackend):
             return None
         src = resources.files("creative_forge.qa").joinpath("ocr_vision.swift").read_bytes()
         digest = hashlib.sha256(src).hexdigest()[:12]
-        cache_dir = cache_dir or Path.home() / ".cache" / "creative-forge"
+        cache_dir = cache_dir or tool_cache_dir()
         binary = cache_dir / f"ocr_vision-{digest}"
         if not binary.exists():
             cache_dir.mkdir(parents=True, exist_ok=True)
@@ -72,14 +87,20 @@ class VisionOcr(OcrBackend):
                 swift = Path(td) / "ocr_vision.swift"
                 swift.write_bytes(src)
                 tmp_bin = Path(td) / "ocr_vision"
-                p = subprocess.run(["swiftc", "-O", str(swift), "-o", str(tmp_bin)], capture_output=True, text=True)
+                p = subprocess.run(
+                    ["swiftc", "-O", str(swift), "-o", str(tmp_bin)], capture_output=True, encoding="utf-8"
+                )
                 if p.returncode != 0:
                     return None
-                shutil.move(str(tmp_bin), binary)
+                staged = cache_dir / f".{binary.name}.{os.getpid()}"
+                shutil.copy2(tmp_bin, staged)  # the temp dir may sit on another volume; rename only within one
+                fsutil.replace(staged, binary)
         return cls(binary)
 
     def read_folder(self, folder: Path) -> list[OcrToken]:
-        p = subprocess.run([str(self.binary), str(folder)], capture_output=True, text=True, check=True)
+        p = subprocess.run(
+            [str(self.binary), str(folder)], capture_output=True, encoding="utf-8", errors="replace", check=True
+        )
         out = []
         for line in p.stdout.splitlines():
             parts = line.split("\t")
@@ -100,7 +121,12 @@ class TesseractOcr(OcrBackend):
         out = []
         for png in sorted(folder.glob("*.png")):
             w, h = Image.open(png).size
-            p = subprocess.run(["tesseract", str(png), "stdout", "--psm", "11", "tsv"], capture_output=True, text=True)
+            p = subprocess.run(
+                ["tesseract", str(png), "stdout", "--psm", "11", "tsv"],
+                capture_output=True,
+                encoding="utf-8",  # tesseract writes UTF-8 whatever the console code page is
+                errors="replace",
+            )
             for line in p.stdout.splitlines()[1:]:
                 cols = line.split("\t")
                 if len(cols) == 12 and cols[11].strip() and float(cols[10]) >= 0:
@@ -110,14 +136,69 @@ class TesseractOcr(OcrBackend):
         return out
 
 
-def detect_backend(prefer: str = "auto") -> OcrBackend | None:
-    if prefer in ("auto", "vision"):
-        b = VisionOcr.build()
-        if b or prefer == "vision":
-            return b
-    if prefer in ("auto", "tesseract"):
+class RapidOcr(OcrBackend):
+    """RapidOCR 3.x on onnxruntime. Same models, same answers on Windows, macOS and Linux."""
+
+    name = "rapidocr"
+
+    def __init__(self, engine: object) -> None:
+        self._engine = engine
+        self._lock = threading.Lock()  # one engine shared by the concept threads; calls are serialized
+
+    @classmethod
+    def build(cls) -> RapidOcr | None:
+        try:
+            from rapidocr import RapidOCR
+        except ImportError:
+            return None
+        return cls(RapidOCR(params={"Global.log_level": "error"}))
+
+    def read_folder(self, folder: Path) -> list[OcrToken]:
+        out = []
+        for png in sorted(folder.glob("*.png")):
+            with Image.open(png) as im:  # opened through Pillow: cv2.imread fails on non-ASCII Windows paths
+                rgb = im.convert("RGB")
+            w, h = rgb.size
+            with self._lock:
+                r = self._engine(rgb)  # type: ignore[operator]
+            if not r.txts:
+                continue
+            for box, text, score in zip(r.boxes, r.txts, r.scores, strict=True):
+                xs, ys = [float(p[0]) for p in box], [float(p[1]) for p in box]
+                norm = (min(xs) / w, min(ys) / h, max(xs) / w, max(ys) / h)
+                out.append(OcrToken(png.name, str(text), float(score), norm))
+        return out
+
+
+def default_order(platform: str | None = None) -> tuple[str, ...]:
+    """Vision first on macOS (best on stylized game fonts in our tests); RapidOCR first everywhere else."""
+    return BACKENDS if (platform or sys.platform) == "darwin" else ("rapidocr", "tesseract")
+
+
+def build_backend(name: str) -> OcrBackend | None:
+    if name == "vision":
+        return VisionOcr.build()
+    if name == "rapidocr":
+        return RapidOcr.build()
+    if name == "tesseract":
         return TesseractOcr.build()
+    raise ValueError(f"unknown OCR backend {name!r} (choose from auto, {', '.join(BACKENDS)}, off)")
+
+
+def detect_backend(prefer: str = "auto") -> OcrBackend | None:
+    """``auto``: the first available backend in ``default_order()``. A named backend: that one or ``None``."""
+    if prefer == "off":
+        return None
+    for name in default_order() if prefer == "auto" else (prefer,):
+        b = build_backend(name)
+        if b is not None:
+            return b
     return None
+
+
+def available_backends() -> list[str]:
+    """Names of the backends that can be built here (builds each once; Vision may compile its helper)."""
+    return [n for n in BACKENDS if build_backend(n) is not None]
 
 
 def levenshtein(a: str, b: str) -> int:
@@ -184,6 +265,12 @@ def _result(name: str, backend: OcrBackend, findings: list[TextFinding], scope: 
     )
 
 
+def _no_backend(name: str) -> CheckResult:
+    r = skipped(name, NO_BACKEND)
+    r.details["backend"] = None
+    return r
+
+
 def check_hook_text(
     video: Path,
     start: float,
@@ -194,7 +281,7 @@ def check_hook_text(
     ignore: list[NormBox] | None = None,
 ) -> CheckResult:
     if backend is None:
-        return skipped("hook_text", "no OCR backend available: install tesseract, or run on macOS with swiftc")
+        return _no_backend("hook_text")
     if end - start < 0.1:
         return skipped("hook_text", "empty hook span")
     with tempfile.TemporaryDirectory(prefix="forge-ocr-") as td:
@@ -219,7 +306,7 @@ def check_image_text(
     image: Path, known_text: list[str], backend: OcrBackend | None, name: str, label: str | None = None
 ) -> CheckResult:
     if backend is None:
-        return skipped(name, "no OCR backend available: install tesseract, or run on macOS with swiftc")
+        return _no_backend(name)
     with tempfile.TemporaryDirectory(prefix="forge-ocr-") as td:
         shutil.copy2(image, Path(td) / "frame.png")
         findings = classify(backend.read_folder(Path(td)), known_text)

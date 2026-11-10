@@ -1,0 +1,11 @@
+<div id="doctor-table">
+  <p>{% if blocked %}<span class="badge fail">blocking problems</span>{% else %}<span class="badge pass">ready</span>{% endif %}
+    <span class="muted">same checks as <code>forge doctor</code></span></p>
+  <table>
+    <tbody>
+    {% for i in items %}
+      <tr><th>{{ i.name }}</th><td><span class="badge {{ i.status }}">{{ i.status }}</span></td><td>{{ i.summary }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>

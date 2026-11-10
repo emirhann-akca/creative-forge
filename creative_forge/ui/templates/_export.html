@@ -1,0 +1,23 @@
+<article class="export">
+  <div class="player">
+    <video controls preload="metadata" src="/runs/{{ run.rid }}/media/{{ e.file|urlencode }}"></video>
+  </div>
+  <div class="meta">
+    <h3>{{ e.file }}</h3>
+    <p>{{ e.concept }} &middot; {{ e.format }} &middot; QA <span class="badge {{ e.status }}">{{ e.status }}</span></p>
+    {% if e.failed %}<p class="fail-text">failed: {{ e.failed|join(", ") }}</p>{% endif %}
+    {% if e.warned %}<p class="muted">warn: {{ e.warned|join(", ") }}</p>{% endif %}
+    <p>Decision: <strong class="decision">{{ d.get("decision", "undecided") }}</strong>
+      {% if d %}<span class="muted">by {{ d.get("reviewer") }} at {{ d.get("at") }}</span>{% endif %}</p>
+    {% if d.get("note") %}<p class="note">&ldquo;{{ d.get("note") }}&rdquo;</p>{% endif %}
+    {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+    <form hx-post="/runs/{{ run.rid }}/review" hx-target="closest article" hx-swap="outerHTML">
+      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="file" value="{{ e.file }}">
+      <label>Note <input name="note" placeholder="required to reject" value=""></label>
+      <label>Reviewer <input name="reviewer" placeholder="your name (default: OS user)"></label>
+      <button type="submit" name="decision" value="approve">Approve</button>
+      <button type="submit" name="decision" value="reject" class="secondary">Reject</button>
+    </form>
+  </div>
+</article>

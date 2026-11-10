@@ -1,10 +1,10 @@
-"""``forge`` command line: plan, run, qa, demo."""
+"""``forge`` command line: plan, run, qa, demo, ideate, review, publish, setup, doctor, ui."""
 
 from __future__ import annotations
 
 import argparse
 import json
-import shutil
+import os
 import sys
 from pathlib import Path
 
@@ -15,6 +15,8 @@ from creative_forge.lint import lint
 from creative_forge.pricing import Pricing, estimate
 from creative_forge.qa.result import CheckResult, Status, worst
 from creative_forge.spec import AdSpec, load_spec
+
+OCR_CHOICES = ["auto", "vision", "rapidocr", "tesseract", "off"]
 
 
 def _print_checks(title: str, checks: list[CheckResult]) -> None:
@@ -61,9 +63,12 @@ def cmd_run(a: argparse.Namespace) -> int:
             ):
                 if p is not None and not p.exists():
                     problems.append(f"{c.id}: {label} file missing: {p}")
-        for tool in ("ffmpeg", "ffprobe"):
-            if shutil.which(tool) is None:
-                problems.append(f"{tool} not on PATH")
+        from creative_forge.ffmpeg import FFmpegError, find_tools
+
+        try:
+            find_tools()
+        except FFmpegError as e:
+            problems.append(str(e))
         if kind == "vertex" and not settings.project:
             problems.append(f"providers=vertex but {ENV_PROJECT} is not set")
         if spec.image_provider == "comfyui":
@@ -277,6 +282,41 @@ def cmd_ideate(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_setup(a: argparse.Namespace) -> int:
+    from creative_forge.setup_ffmpeg import SetupError, setup_ffmpeg
+
+    def log(msg: str) -> None:
+        print(msg, flush=True)
+
+    try:
+        res = setup_ffmpeg(force=a.force, log=log)
+    except SetupError as e:
+        print(f"setup failed: {e}", file=sys.stderr)
+        return 1
+    from creative_forge.ffmpeg import aac_encoders
+
+    verb = "already usable, kept" if res.action == "kept" else "installed"
+    print(f"ffmpeg  {res.tools.ffmpeg}  ({res.tools.source}; {verb})")
+    print(f"        {res.features.version}")
+    print(f"ffprobe {res.tools.ffprobe}")
+    print(f"AAC encoders that open: {', '.join(aac_encoders())}; libx264 and all required filters present")
+    return 0
+
+
+def cmd_doctor(a: argparse.Namespace) -> int:
+    from creative_forge.doctor import failed, format_text, run_doctor, to_json
+
+    items = run_doctor(comfyui_url=a.comfyui)
+    print(to_json(items) if a.json else format_text(items))
+    return 1 if failed(items) else 0
+
+
+def cmd_ui(a: argparse.Namespace) -> int:
+    from creative_forge.ui.app import serve
+
+    return serve(Path(a.root), host=a.host, port=a.port, open_browser=not a.no_browser)
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="forge", description="Spec-driven AI-hook video ad pipeline with QA.")
     p.add_argument("--version", action="version", version=f"creative-forge {__version__}")
@@ -296,7 +336,7 @@ def build_parser() -> argparse.ArgumentParser:
     sr.add_argument("--jobs", type=int, default=2)
     sr.add_argument("--only", nargs="*", default=None, help="concept ids to run")
     sr.add_argument("--keep-work", action="store_true", help="keep per-job temp directories")
-    sr.add_argument("--ocr", choices=["auto", "vision", "tesseract", "off"], default="auto")
+    sr.add_argument("--ocr", choices=OCR_CHOICES, default="auto")
     sr.add_argument("--judge-runs", type=int, default=None)
     sr.add_argument("--pricing")
     sr.set_defaults(fn=cmd_run)
@@ -308,7 +348,7 @@ def build_parser() -> argparse.ArgumentParser:
     sq.add_argument("--hook-end", type=float, default=None, help="seconds where the hook crossfade starts")
     sq.add_argument("--gameplay-end", type=float, default=None)
     sq.add_argument("--crossfade", type=float, default=0.3)
-    sq.add_argument("--ocr", choices=["auto", "vision", "tesseract", "off"], default="auto")
+    sq.add_argument("--ocr", choices=OCR_CHOICES, default="auto")
     sq.add_argument("--judge-runs", type=int, default=0)
     sq.add_argument("--providers", choices=["vertex", "fake"], default=None)
     sq.add_argument("--json", help="write results as JSON")
@@ -318,7 +358,7 @@ def build_parser() -> argparse.ArgumentParser:
     sd.add_argument("--out", default="out/demo")
     sd.add_argument("--jobs", type=int, default=2)
     sd.add_argument("--keep-work", action="store_true")
-    sd.add_argument("--ocr", choices=["auto", "vision", "tesseract", "off"], default="auto")
+    sd.add_argument("--ocr", choices=OCR_CHOICES, default="auto")
     sd.set_defaults(fn=cmd_demo)
 
     si = sub.add_parser("ideate", help="draft hook concepts as a spec with a tool-calling LLM and the lesson library")
@@ -347,10 +387,43 @@ def build_parser() -> argparse.ArgumentParser:
     su.add_argument("--to", required=True, help="delivery directory")
     su.add_argument("--override", metavar="REASON", help="publish approved exports despite failed checks")
     su.set_defaults(fn=cmd_publish)
+
+    ss = sub.add_parser("setup", help="install dependencies creative-forge manages itself")
+    ssub = ss.add_subparsers(dest="what", required=True)
+    sf = ssub.add_parser(
+        "ffmpeg",
+        help="keep a usable ffmpeg, or download the pinned 9.0.2 build (SHA-256 verified) into the user data dir",
+    )
+    sf.add_argument("--force", action="store_true", help="download the pinned build even if a usable ffmpeg exists")
+    sf.set_defaults(fn=cmd_setup)
+
+    sdoc = sub.add_parser("doctor", help="check ffmpeg, OCR, folders, ComfyUI and credentials; exit 1 on a blocker")
+    sdoc.add_argument("--json", action="store_true", help="machine-readable output")
+    sdoc.add_argument(
+        "--comfyui", metavar="URL", help="also check a ComfyUI server (default: $CREATIVE_FORGE_COMFYUI_URL)"
+    )
+    sdoc.set_defaults(fn=cmd_doctor)
+
+    sui = sub.add_parser("ui", help="local web page: runs, QA reports, players, approve / reject, demo, doctor")
+    sui.add_argument("--root", default="out", help="folder searched for runs (default: out)")
+    sui.add_argument("--host", default="127.0.0.1", help="bind address; anything but loopback exposes the page")
+    sui.add_argument("--port", type=int, default=None, help="default 8765, or any free port if that is taken")
+    sui.add_argument("--no-browser", action="store_true", help="do not open a browser tab")
+    sui.set_defaults(fn=cmd_ui)
     return p
 
 
+def _utf8_console() -> None:
+    """A pipe or a file on Windows gets the ANSI code page (cp1252/cp1254), which cannot encode a path with "Ş";
+    printing it would crash. Consoles are UTF-16 already; everything else is switched to UTF-8."""
+    for stream in (sys.stdout, sys.stderr):
+        enc = (getattr(stream, "encoding", None) or "").lower().replace("-", "")
+        if enc != "utf8" and hasattr(stream, "reconfigure") and not os.environ.get("PYTHONIOENCODING"):
+            stream.reconfigure(encoding="utf-8", errors="backslashreplace")
+
+
 def main(argv: list[str] | None = None) -> int:
+    _utf8_console()
     args = build_parser().parse_args(argv)
     try:
         return int(args.fn(args))

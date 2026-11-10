@@ -8,14 +8,14 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from creative_forge.ffmpeg import encoders, extract_frame, probe, run
+from creative_forge.ffmpeg import aac_encoders, extract_frame, probe, run
 from creative_forge.loudness import measure
 from creative_forge.spec import AudioSpec, ExportSpec, RenderSpec
 from creative_forge.stages.audio import Placed, master, mix, mux
 from creative_forge.stages.export import export_4x5, export_9x16, maxrate_for, size_4x5
 from creative_forge.stages.video import atempo_chain
 
-ENCODERS = ["aac"] + (["aac_at"] if "aac_at" in encoders() else [])
+ENCODERS = aac_encoders()  # every AAC encoder this ffmpeg can open: aac_at on macOS, aac_mf on Windows, aac
 
 
 @pytest.mark.parametrize("encoder", ENCODERS)

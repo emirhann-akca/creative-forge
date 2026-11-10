@@ -2,11 +2,38 @@
 
 from __future__ import annotations
 
+import os
+import shutil
+import tempfile
 from pathlib import Path
 
 import pytest
 
-from creative_forge.ffmpeg import run
+from creative_forge.ffmpeg import ENV_FFMPEG_DIR, FFmpegError, find_tools, run
+from creative_forge.paths import ENV_HOME
+
+_ISOLATED_HOME: str | None = None
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Tests never write into the real user data and cache folders (doctor's write probe, the compiled Vision helper):
+    CREATIVE_FORGE_HOME points at a temporary folder. The ffmpeg this machine resolves (managed build or PATH) is pinned
+    first with CREATIVE_FORGE_FFMPEG_DIR, so moving the home does not hide it. Runs before test modules are imported."""
+    global _ISOLATED_HOME
+    try:
+        tools = find_tools()
+        if tools.ffprobe.parent == tools.ffmpeg.parent:
+            os.environ.setdefault(ENV_FFMPEG_DIR, str(tools.ffmpeg.parent))
+    except FFmpegError:
+        pass  # the tests that need ffmpeg fail with the resolver's own message
+    _ISOLATED_HOME = tempfile.mkdtemp(prefix="forge-test-home-")
+    os.environ[ENV_HOME] = _ISOLATED_HOME
+
+
+def pytest_unconfigure(config: pytest.Config) -> None:
+    if _ISOLATED_HOME:
+        shutil.rmtree(_ISOLATED_HOME, ignore_errors=True)
+
 
 W, H = 180, 320
 

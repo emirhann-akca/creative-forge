@@ -103,7 +103,7 @@ def test_pending_operation_is_resumed_not_resubmitted(tmp_path, frame):
     key = content_key("video:fake-video", req.cache_payload())
     gen.cache.set_pending("video", key, {"operation": "projects/x/operations/resume-me"})
     files = gen.video(req, "c1")
-    meta = json.loads((files[0].parent / "meta.json").read_text())
+    meta = json.loads((files[0].parent / "meta.json").read_text(encoding="utf-8"))
     assert meta["info"]["operation"] == "projects/x/operations/resume-me"
     assert "resumed" in gen.ledger.entries[0].detail
 
@@ -123,7 +123,7 @@ def test_pending_operation_is_read_after_waiting_for_the_key_lock(tmp_path, fram
     gen.cache.set_pending("video", key, {"operation": "projects/x/operations/from-job-a"})  # A submitted, then died
     lock.release()
     job_b.join(10)
-    meta = json.loads((results[0][0].parent / "meta.json").read_text())
+    meta = json.loads((results[0][0].parent / "meta.json").read_text(encoding="utf-8"))
     assert meta["info"]["operation"] == "projects/x/operations/from-job-a"
 
 

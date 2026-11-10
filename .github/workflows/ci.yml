@@ -2,28 +2,210 @@ name: ci
 
 on:
   push:
-    branches: [main]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  test:
+  lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - name: Install
+        run: |
+          uv venv --python 3.13 .venv
+          uv pip install -e ".[dev]"
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+      - name: ruff check
+        run: bash .github/scripts/annotate.sh "ruff check" ruff check --output-format=github .
+      - name: ruff format
+        run: bash .github/scripts/annotate.sh "ruff format" ruff format --check .
+      - name: shellcheck
+        run: |
+          bash .github/scripts/annotate.sh "shellcheck install.sh" shellcheck -s sh install.sh
+          bash .github/scripts/annotate.sh "shellcheck annotate.sh" shellcheck .github/scripts/annotate.sh
+      - name: Parse install.ps1 (PowerShell 7 parser)
+        shell: pwsh
+        run: |
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile("$PWD/install.ps1", [ref]$null, [ref]$errors) | Out-Null
+          foreach ($e in $errors) { Write-Output "::error file=install.ps1,line=$($e.Extent.StartLineNumber),title=install.ps1 parse error::$($e.Message)" }
+          if ($errors) { exit 1 }
+
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - name: Build wheel and sdist
+        run: bash .github/scripts/annotate.sh "uv build" uv build --out-dir dist
+      - name: The wheel carries the UI templates, htmx and its license
+        run: |
+          python3 - <<'PY'
+          import glob, zipfile
+          names = set(zipfile.ZipFile(glob.glob("dist/*.whl")[0]).namelist())
+          need = ["creative_forge/ui/static/htmx.min.js", "creative_forge/ui/static/htmx.LICENSE.txt",
+                  "creative_forge/ui/templates/run.html", "creative_forge/qa/ocr_vision.swift",
+                  "creative_forge/data/pricing.yaml"]
+          missing = [n for n in need if n not in names]
+          if missing:
+              print(f"::error title=wheel contents::missing {missing}")
+              raise SystemExit(1)
+          PY
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
+
+  tests:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12"]
+        os: [windows-latest, macos-latest, ubuntu-latest]
+        python: ["3.11", "3.12", "3.13"]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      CREATIVE_FORGE_REQUIRE_OCR: rapidocr # the RapidOCR tests fail instead of skipping if the backend is missing
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-      - name: Install ffmpeg
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
-      - name: Install package
-        run: pip install -e ".[dev]"
-      - name: Lint
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - name: Install (Python ${{ matrix.python }}, editable, with the ocr extra)
         run: |
-          ruff check .
-          ruff format --check .
-      - name: Test
-        run: pytest -q
+          uv venv --python "${{ matrix.python }}" .venv
+          uv pip install -e ".[dev,ocr]"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            echo "$GITHUB_WORKSPACE\\.venv\\Scripts" >> "$GITHUB_PATH"
+          else
+            echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
+          fi
+      - name: forge setup ffmpeg (the pinned, SHA-256 verified download a user gets)
+        run: bash .github/scripts/annotate.sh "forge setup ffmpeg" forge setup ffmpeg
+      - name: forge doctor
+        run: bash .github/scripts/annotate.sh "forge doctor" forge doctor
+      - name: Tests (a locale-dependent encoding anywhere in our code is an error, on every OS)
+        run: >-
+          bash .github/scripts/annotate.sh "pytest ${{ matrix.os }} py${{ matrix.python }}"
+          python -X warn_default_encoding -W error::EncodingWarning -m pytest -q -p no:cacheprovider
+
+  user-install:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, via: "curl | sh" }
+          - { os: macos-latest, via: "curl | sh" }
+          - { os: windows-latest, via: "Windows PowerShell 5.1, irm | iex" }
+          - { os: windows-latest, via: "PowerShell 7, Get-Content | iex" }
+    name: user-install (${{ matrix.os }}, ${{ matrix.via }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      SCRIPT_REF: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist
+      - name: Install like a user (curl | sh)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          whl="$(ls "$PWD"/dist/*.whl)"
+          url="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${SCRIPT_REF}/install.sh"
+          bash .github/scripts/annotate.sh "install.sh" bash -c "set -o pipefail; curl -LsSf '$url' | FORGE_SOURCE='$whl' sh"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Install like a user (Windows PowerShell 5.1, irm | iex)
+        if: matrix.via == 'Windows PowerShell 5.1, irm | iex'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Continue'
+          . .github\scripts\Invoke-Step.ps1
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile("$PWD\install.ps1", [ref]$null, [ref]$errors) | Out-Null
+          foreach ($e in $errors) { Write-Output "::error file=install.ps1,line=$($e.Extent.StartLineNumber),title=install.ps1 (5.1 parser)::$($e.Message)" }
+          if ($errors) { exit 1 }
+          $env:FORGE_SOURCE = (Get-ChildItem dist\*.whl).FullName
+          $url = "https://raw.githubusercontent.com/$env:GITHUB_REPOSITORY/$env:SCRIPT_REF/install.ps1"
+          Invoke-Step 'install.ps1 (5.1)' { powershell -NoProfile -ExecutionPolicy Bypass -Command "irm $url | iex" }
+          Add-Content -Path $env:GITHUB_PATH -Value "$env:USERPROFILE\.local\bin" -Encoding Ascii
+      - name: Install like a user (PowerShell 7)
+        if: matrix.via == 'PowerShell 7, Get-Content | iex'
+        shell: pwsh
+        run: |
+          . ./.github/scripts/Invoke-Step.ps1
+          $env:FORGE_SOURCE = (Get-ChildItem dist/*.whl).FullName
+          Invoke-Step 'install.ps1 (7)' { pwsh -NoProfile -ExecutionPolicy Bypass -Command "Get-Content -Raw ./install.ps1 | Invoke-Expression" }
+          Add-Content -Path $env:GITHUB_PATH -Value "$env:USERPROFILE\.local\bin"
+      - name: The installed forge uses the ffmpeg it downloaded, and RapidOCR or Vision
+        shell: pwsh
+        run: |
+          . ./.github/scripts/Invoke-Step.ps1
+          Invoke-Step 'forge --version' { forge --version }
+          Invoke-Step 'forge doctor --json' { forge doctor --json > "$env:RUNNER_TEMP/doctor.json" }
+          $d = Get-Content -Raw "$env:RUNNER_TEMP/doctor.json" | ConvertFrom-Json
+          $ff = $d.items | Where-Object name -eq 'ffmpeg'
+          $ocr = $d.items | Where-Object name -eq 'ocr'
+          Write-Output "ffmpeg: $($ff.summary)"
+          Write-Output "ocr: $($ocr.summary)"
+          if ($ff.details.source -ne 'managed') { Write-Output "::error title=ffmpeg source::expected the managed build, got $($ff.details.source)"; exit 1 }
+          if ($ocr.status -ne 'ok') { Write-Output "::error title=ocr::$($ocr.summary)"; exit 1 }
+      - name: forge demo, review, publish and ui in a directory with Turkish characters
+        shell: pwsh
+        run: |
+          [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+          . ./.github/scripts/Invoke-Step.ps1
+          # "Çalışma Ş/İğ", built from code points so the workflow file's own encoding cannot mangle it
+          $top = -join [char[]](0x00C7, 0x61, 0x6C, 0x0131, 0x015F, 0x6D, 0x61, 0x20, 0x015E)
+          $sub = -join [char[]](0x0130, 0x011F)
+          $work = Join-Path (Join-Path $env:RUNNER_TEMP $top) $sub
+          New-Item -ItemType Directory -Force $work | Out-Null
+          Set-Location -LiteralPath $work
+          Write-Output "working in $work"
+          Invoke-Step 'forge doctor (Turkish dir)' { forge doctor }
+          Invoke-Step 'forge demo (Turkish dir)' { forge demo --out out }
+          $files = @((Get-Content -Raw out/report.json | ConvertFrom-Json).concepts.exports.file)
+          $note = 'CI: T' + [char]0x00FC + 'rk' + [char]0x00E7 + 'e not'
+          Invoke-Step 'forge review' { forge review out --approve @files --note $note --reviewer ci }
+          Invoke-Step 'forge publish' { forge publish out --to deliver }
+          $ui = Start-Process -FilePath (Get-Command forge).Source -WorkingDirectory $work -PassThru -NoNewWindow `
+            -ArgumentList 'ui', '--no-browser', '--port', '8765', '--root', $work
+          try {
+            $page = $null
+            foreach ($i in 1..60) {
+              try { $page = Invoke-WebRequest -Uri 'http://127.0.0.1:8765/' -UseBasicParsing; break } catch { Start-Sleep -Milliseconds 500 }
+            }
+            if (-not $page -or $page.Content -notmatch '/runs/out') { Write-Output "::error title=forge ui::the runs page did not list the demo run"; exit 1 }
+            $run = Invoke-WebRequest -Uri 'http://127.0.0.1:8765/runs/out' -UseBasicParsing
+            $range = Invoke-WebRequest -Uri "http://127.0.0.1:8765/runs/out/media/$($files[0])" -Headers @{ Range = 'bytes=0-99' } -UseBasicParsing
+            if ($run.StatusCode -ne 200 -or $range.StatusCode -ne 206) { Write-Output "::error title=forge ui::run page $($run.StatusCode), range request $($range.StatusCode)"; exit 1 }
+            Write-Output "forge ui: runs page, run page and a 206 range request OK"
+          } finally {
+            Stop-Process -Id $ui.Id -Force -ErrorAction SilentlyContinue
+          }
+          $art = Join-Path $env:RUNNER_TEMP 'forge-artifacts'
+          New-Item -ItemType Directory -Force $art | Out-Null
+          Copy-Item out/report.html, out/report.json, out/review.json, deliver/manifest.json, "$env:RUNNER_TEMP/doctor.json" -Destination $art
+          Copy-Item out/*.mp4 -Destination $art
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: forge-demo-${{ matrix.os }}-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/forge-artifacts/
+          if-no-files-found: warn
+          retention-days: 7
