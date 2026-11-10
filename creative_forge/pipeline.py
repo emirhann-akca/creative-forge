@@ -24,7 +24,7 @@ from creative_forge.cache import GenerationCache
 from creative_forge.config import Settings
 from creative_forge.ffmpeg import extract_frame, require_tools
 from creative_forge.generator import Generator
-from creative_forge.imaging import disclaimer_overlay, prepare_first_frame
+from creative_forge.imaging import disclaimer_overlay, prepare_first_frame, restore_outside
 from creative_forge.ledger import BudgetGuard, CostLedger
 from creative_forge.lint import LintIssue, lint
 from creative_forge.pricing import Plan, Pricing, estimate
@@ -166,9 +166,12 @@ class Pipeline:
             first = prepare_first_frame(gp.real_frame, h.text_regions, h.effects, work / "first_frame_base.png")
             if h.image_prompt:
                 refs = tuple(spec.resolve(p) for p in h.reference_images)  # type: ignore[misc]
-                first = self.gen.image_edit(
-                    ImageEditRequest(h.image_prompt, first, spec.models.image_edit, refs, "9:16"), c.id
+                edited = self.gen.image_edit(
+                    ImageEditRequest(h.image_prompt, first, spec.image_edit_model, refs, "9:16", h.edit_region), c.id
                 )
+                if h.edit_region:  # the model's pixels survive only inside the region it was allowed to change
+                    edited = restore_outside(first, edited, h.edit_region, work / "first_frame.png")
+                first = edited
             res.pre_checks.append(check_image_text(first, spec.qa.known_text, self.ocr, "first_frame_text"))
 
             self.log(f"[{c.id}] hook video ({h.samples} x {h.duration_s}s)")

@@ -16,15 +16,19 @@ class ImageEditRequest:
     model: str
     reference_images: tuple[Path, ...] = ()
     aspect_ratio: str = "9:16"
+    mask_box: tuple[int, int, int, int] | None = None  # hook.edit_region; providers without a mask input ignore it
 
     def cache_payload(self) -> dict[str, Any]:
-        return {
+        payload: dict[str, Any] = {
             "prompt": self.prompt,
             "base_image": self.base_image,
             "model": self.model,
             "reference_images": list(self.reference_images),
             "aspect_ratio": self.aspect_ratio,
         }
+        if self.mask_box is not None:
+            payload["mask_box"] = list(self.mask_box)
+        return payload
 
 
 @dataclass(frozen=True)

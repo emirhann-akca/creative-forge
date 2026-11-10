@@ -10,7 +10,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
 from creative_forge.spec import Box, Effect
 
@@ -91,6 +91,20 @@ def prepare_first_frame(real_frame: Path, regions: list[Box], effects: list[Effe
     for e in effects:
         img = apply_effect(img, e)
     img.save(out)
+    return out
+
+
+def restore_outside(base: Path, edited: Path, box: Box, out: Path, feather: float = 6.0) -> Path:
+    """Keep the image model's pixels only inside ``box``; every pixel outside it is the real frame again.
+
+    Asking the model to keep the board unchanged is a request; this makes it a guarantee. The blend is feathered
+    inward only, so nothing outside the box is touched even partially."""
+    b = Image.open(base).convert("RGB")
+    e = Image.open(edited).convert("RGB").resize(b.size, Image.LANCZOS)
+    hard = Image.new("L", b.size, 0)
+    ImageDraw.Draw(hard).rectangle(box, fill=255)
+    mask = ImageChops.darker(hard.filter(ImageFilter.GaussianBlur(feather)), hard)
+    Image.composite(e, b, mask).save(out)
     return out
 
 

@@ -66,6 +66,12 @@ def cmd_run(a: argparse.Namespace) -> int:
                 problems.append(f"{tool} not on PATH")
         if kind == "vertex" and not settings.project:
             problems.append(f"providers=vertex but {ENV_PROJECT} is not set")
+        if spec.image_provider == "comfyui":
+            from creative_forge.providers.comfyui import preflight
+
+            problem = preflight(settings.comfyui_url, spec.comfyui.checkpoint)
+            if problem:
+                problems.append(problem)
         for i in lint(spec):
             print(f"lint {i.concept}: [{i.rule}] {i.message}")
         for p in problems:
@@ -83,7 +89,7 @@ def cmd_run(a: argparse.Namespace) -> int:
     from creative_forge.report import write_report
 
     try:
-        providers = build_providers(kind, settings)
+        providers = build_providers(kind, settings, image=spec.image_provider, comfyui=spec.comfyui)
     except ConfigError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2

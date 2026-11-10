@@ -98,7 +98,9 @@ def estimate(spec: AdSpec, pricing: Pricing, judge_runs: int | None = None) -> P
     runs = spec.qa.judge_runs if judge_runs is None else judge_runs
     for c in spec.concepts:
         h = c.hook
-        if h.image_prompt:
+        if h.image_prompt and spec.image_provider == "comfyui":
+            plan.lines.append(PlanLine(c.id, "hook image", spec.image_edit_model, "1 local SDXL edit", 0.0))
+        elif h.image_prompt:
             plan.lines.append(PlanLine(c.id, "hook image", spec.models.image_edit, "1 image edit", pricing.image(1)))
         plan.lines.append(
             PlanLine(

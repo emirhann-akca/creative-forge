@@ -14,6 +14,7 @@ ENV_PROJECT = "CREATIVE_FORGE_PROJECT"
 ENV_VIDEO_LOCATION = "CREATIVE_FORGE_VIDEO_LOCATION"
 ENV_GENAI_LOCATION = "CREATIVE_FORGE_GENAI_LOCATION"
 ENV_CACHE = "CREATIVE_FORGE_CACHE"
+ENV_COMFYUI_URL = "CREATIVE_FORGE_COMFYUI_URL"
 
 
 class ConfigError(RuntimeError):
@@ -26,6 +27,7 @@ class Settings:
     video_location: str = "us-central1"
     genai_location: str = "global"
     cache_dir: Path = Path(".forge-cache")
+    comfyui_url: str = "http://127.0.0.1:8188"
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> Settings:
@@ -36,6 +38,7 @@ class Settings:
             video_location=env.get(ENV_VIDEO_LOCATION, "us-central1"),
             genai_location=env.get(ENV_GENAI_LOCATION, "global"),
             cache_dir=Path(env.get(ENV_CACHE, ".forge-cache")),
+            comfyui_url=env.get(ENV_COMFYUI_URL, "http://127.0.0.1:8188"),
         )
 
     def require_project(self) -> str:

@@ -4,9 +4,22 @@ from __future__ import annotations
 
 from creative_forge.config import Settings
 from creative_forge.providers.base import ProviderSet
+from creative_forge.spec import ComfyUISpec
 
 
-def build_providers(kind: str, settings: Settings) -> ProviderSet:
+def build_providers(
+    kind: str, settings: Settings, *, image: str | None = None, comfyui: ComfyUISpec | None = None
+) -> ProviderSet:
+    """``kind`` picks every provider; ``image="comfyui"`` swaps in the local ComfyUI image edit on top of it."""
+    providers = _build(kind, settings)
+    if image == "comfyui":
+        from creative_forge.providers.comfyui import ComfyUIImageEditProvider
+
+        providers.image_edit = ComfyUIImageEditProvider(settings.comfyui_url, comfyui or ComfyUISpec())
+    return providers
+
+
+def _build(kind: str, settings: Settings) -> ProviderSet:
     if kind == "fake":
         from creative_forge.providers.fake import fake_providers
 

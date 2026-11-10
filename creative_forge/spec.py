@@ -48,6 +48,23 @@ class Models(_Model):
     judge: ModelId = "gemini-3.1-pro-preview"
 
 
+class ComfyUISpec(_Model):
+    """Local SDXL edit through ComfyUI (``image_provider: comfyui``). Sampler values are SDXL-base defaults, not
+    production values: the October 2026 ads used Gemini for this step."""
+
+    checkpoint: Annotated[str, Field(pattern=r"^[\w.-]+\.(safetensors|ckpt)$")] = "sd_xl_base_1.0.safetensors"
+    steps: int = Field(28, ge=1, le=150)
+    cfg: float = Field(6.0, gt=0, le=30)
+    sampler: Annotated[str, Field(pattern=r"^[a-z0-9_]+$")] = "dpmpp_2m"
+    scheduler: Annotated[str, Field(pattern=r"^[a-z0-9_]+$")] = "karras"
+    seed: int = Field(7, ge=0)
+    # None: 1.0 for a masked edit (new content inside hook.edit_region; at 0.9 SDXL base barely changed the region
+    # in the local test), 0.45 for a whole-frame img2img pass.
+    denoise: float | None = Field(None, gt=0, le=1)
+    negative_prompt: str = "text, letters, watermark, logo, blurry, deformed hand, extra fingers, photo frame"
+    timeout_s: float = Field(900, gt=0)
+
+
 class RenderSpec(_Model):
     width: int = Field(1080, ge=64)
     height: int = Field(1920, ge=64)
@@ -180,6 +197,9 @@ class Patch(_Model):
 
 class HookSpec(_Model):
     image_prompt: str | None = None  # None: the prepared real frame is the first frame (no image model call)
+    # The only region the image model may change (x0, y0, x1, y1, output pixels). Everything outside it is restored
+    # from the real frame after the edit, whatever the model did there. ComfyUI also uses it as the inpaint mask.
+    edit_region: Box | None = None
     reference_images: list[Path] = Field(default_factory=list, max_length=3)
     video_prompt: str
     negative_prompt: str = DEFAULT_VEO_NEGATIVE
@@ -205,6 +225,8 @@ class HookSpec(_Model):
             raise ValueError("hook.tail_trim_s leaves less than 0.5 s of hook")
         for box in self.text_regions:
             _corners(box, "hook.text_regions entry")
+        if self.edit_region is not None:
+            _corners(self.edit_region, "hook.edit_region")
         return self
 
     @property
@@ -264,6 +286,8 @@ class AdSpec(_Model):
     version: Literal[1] = 1
     name: SafeName
     providers: Literal["vertex", "fake"] = "vertex"
+    image_provider: Literal["comfyui"] | None = None  # None: same as `providers`
+    comfyui: ComfyUISpec = Field(default_factory=ComfyUISpec)
     output_dir: Path = Path("out")
     models: Models = Field(default_factory=Models)
     render: RenderSpec = Field(default_factory=RenderSpec)
@@ -287,10 +311,16 @@ class AdSpec(_Model):
                 raise ValueError(f"{c.id}: hook cut must be longer than the crossfade")
             if c.gameplay.output_duration <= 2 * x + self.audio.gameplay_skip_s + 0.5:
                 raise ValueError(f"{c.id}: gameplay segment is too short for two crossfades")
-            for p in c.hook.patches:
-                if p.box[2] > self.render.width or p.box[3] > self.render.height:
-                    raise ValueError(f"{c.id}: patch box outside the {self.render.width}x{self.render.height} frame")
+            boxes = [("patch box", p.box) for p in c.hook.patches] + [("edit_region", c.hook.edit_region)]
+            for what, box in boxes:
+                if box is not None and (box[2] > self.render.width or box[3] > self.render.height):
+                    raise ValueError(f"{c.id}: {what} outside the {self.render.width}x{self.render.height} frame")
         return self
+
+    @property
+    def image_edit_model(self) -> str:
+        """What the hook image step runs: a Vertex model ID, or the local checkpoint file."""
+        return self.comfyui.checkpoint if self.image_provider == "comfyui" else self.models.image_edit
 
     def resolve(self, p: Path | None) -> Path | None:
         if p is None:
