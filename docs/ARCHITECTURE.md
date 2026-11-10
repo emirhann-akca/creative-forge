@@ -9,7 +9,7 @@
 | `cache.py` | Content-addressed store with atomic entries (written to a temp dir, then `os.replace`) and `pending.json` for long-running operations. |
 | `ledger.py` | `CostLedger` (every call, cached or not) and `BudgetGuard` (reserve before the call, release after). |
 | `generator.py` | The only path to a provider: per-key lock, then cache lookup, budget reservation, call, cache write and ledger entry. |
-| `providers/` | `base.py` interfaces and request types. `vertex.py` is REST over `google-auth` ADC. `fake.py` is offline media built with ffmpeg and Pillow. |
+| `providers/` | `base.py` interfaces and request types. `vertex.py` is REST over `google-auth` ADC. `comfyui.py` runs the hook image edit on a local ComfyUI server (SDXL workflows in `data/comfyui/`). `fake.py` is offline media built with ffmpeg and Pillow. |
 | `imaging.py` | Text stripping, programmatic effects (dust, mud, frost, darken), headline and button rendering, end-card frames, disclaimer overlay. |
 | `stages/video.py` | Gameplay segment, hook clip (trim, patches, mci interpolation), end card, crossfaded assembly. |
 | `stages/audio.py` | Mix (padded FX bus, sidechain ducking), master loop, mux. |
@@ -18,11 +18,13 @@
 | `lint.py` | Plan-time rules learned in production, checked before any spend. |
 | `pipeline.py` | One job per concept in a private temp dir, a thread pool across concepts, then the blind judge. |
 | `report.py` | Self-contained HTML (inline CSS, base64 contact sheets) and a JSON twin. |
+| `review.py` | Human decisions per export (`review.json`, keyed to file SHA-256) and the publish gate with its manifest. |
+| `ideate/` | `library.py`: lesson library, hashing or Vertex embedder, JSON vector index. `tools.py`: function declarations and their local implementations. `agent.py`: the function-calling loop, the Vertex chat model and the scripted one. |
 
 ## One concept, step by step
 
 1. **Gameplay segment.** The clip is cut `[in_s, out_s)`, optionally cropped (for example to drop a status bar), cover-scaled to the render size, retimed by `speed` and resampled to the output fps. The **real frame** is the first frame of this output. That makes it the exact pixels the viewer will see after the cut: same crop, same scaling, no second colour pass.
-2. **First frame.** `text_regions` are blurred out, then `effects` are painted on the real frame. If `image_prompt` is set, the image model adds only the hand or tool.
+2. **First frame.** `text_regions` are blurred out, then `effects` are painted on the real frame. If `image_prompt` is set, the image model adds only the hand or tool. If `edit_region` is set, every pixel outside it is copied back from the prepared frame after the edit (ComfyUI also uses it as the inpaint mask).
 3. **Hook video.** Veo is called with `image` = first frame, `lastFrame` = real frame, `durationSeconds`, `generateAudio`, `sampleCount` and the negative prompt. The operation name is saved on submit. Polling runs every 10 s for up to 120 polls.
 4. **Hook clip.** The pipeline cuts at `cut_s`, the default being duration − 1 s. It overlays `patches` (regions of the real frame, feathered, faded in at `from_s`), then runs `minterpolate=fps=60:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1` and `fps=<output>`. The hook's own audio goes through `loudnorm=I=-16:TP=-3:LRA=11` with a 0.25 s fade-out.
 5. **Assembly.** `xfade` the hook into the gameplay, then the gameplay into the end card, each over `crossfade_s`. The disclaimer overlay is enabled only before the first crossfade.
@@ -65,11 +67,24 @@ Why it loops at all: the limiter squashes transient gameplay SFX harder than the
 
 ## Caching and money
 
-- Cache key: `sha256(kind:provider, canonical JSON of the request)`. Every `Path` in the request is replaced by the SHA-256 of the file's bytes. Fake and real providers never share entries.
+- Cache key: `sha256(kind:provider, canonical JSON of the request)`. Every `Path` in the request is replaced by the SHA-256 of the file's bytes, and provider-side settings that change the output (`Provider.cache_params()`, e.g. ComfyUI's sampler, seed and workflow hashes) are folded in. Fake and real providers never share entries.
 - The `Generator` holds one lock per key. Two jobs asking for the same generation at once pay once: the second waits, then hits the cache.
 - `BudgetGuard.reserve()` runs before every billable call, and the guard counts spent plus reserved. An unpriced call (the judge, by default) is refused while a budget is set.
 - `VertexClient.post(idempotent=False)` is used to submit long-running jobs. It retries only on 429, 503 and connections that never reached the server (refused, unresolvable, connect timeout). It never retries on a read timeout, a dropped connection or a 500, where the job may exist and a retry could pay twice. Polling is idempotent and retries on all of them.
 
 ## Adding a provider
 
-Implement one of the interfaces in `providers/base.py` and set `name` (it is part of the cache key) and `billable`. Then return a `ProviderResult(files, info)` and wire it into `providers/__init__.py:build_providers`. Caching, budget and ledger come from the `Generator` for free.
+Implement one of the interfaces in `providers/base.py` and set `name` (it is part of the cache key), `billable`, and `local` for a provider that runs on this machine (no list price). Return anything that changes the output but is not in the request from `cache_params()`. Then return a `ProviderResult(files, info)` and wire it into `providers/__init__.py:build_providers`. Caching, budget and ledger come from the `Generator` for free.
+
+## The ideation loop
+
+```
+contents = [user: brief + N]
+repeat up to --max-steps:
+    response = Gemini generateContent(systemInstruction, contents, functionDeclarations, mode ANY)
+    append the model turn verbatim                      # keeps thought signatures
+    for each functionCall: run the local tool, append its functionResponse
+    stop when submit_concepts accepted the set          # AdSpec validation + lint, same code as forge run
+```
+
+Tool errors go back to the model as `{"error": ...}`; they do not end the run. `strip-text` cannot be satisfied from text (it needs pixel boxes of the real frame), so it is written into the spec as a TODO instead of blocking acceptance.
