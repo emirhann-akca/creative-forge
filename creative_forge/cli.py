@@ -325,7 +325,7 @@ def build_parser() -> argparse.ArgumentParser:
     si.add_argument("--game", required=True, help="short description of the game and the ad goal")
     si.add_argument("--clips", nargs="+", required=True, help="real gameplay clips the concepts may use")
     si.add_argument("--n", type=int, default=3, choices=range(1, 7), metavar="N", help="concepts to write (1-6)")
-    si.add_argument("--out", default="ideas.yaml")
+    si.add_argument("--out", default="out/ideas.yaml")
     si.add_argument("--name", default="ideas", help="spec name (lowercase, a-z0-9_-)")
     si.add_argument("--llm", choices=["fake", "vertex"], default="fake", help="fake: scripted, offline")
     si.add_argument("--model", default="gemini-2.5-flash")

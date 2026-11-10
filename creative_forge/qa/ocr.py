@@ -215,10 +215,12 @@ def check_hook_text(
     return _result("hook_text", backend, findings, f"the hook ({start:.1f}-{end:.1f} s)")
 
 
-def check_image_text(image: Path, known_text: list[str], backend: OcrBackend | None, name: str) -> CheckResult:
+def check_image_text(
+    image: Path, known_text: list[str], backend: OcrBackend | None, name: str, label: str | None = None
+) -> CheckResult:
     if backend is None:
         return skipped(name, "no OCR backend available: install tesseract, or run on macOS with swiftc")
     with tempfile.TemporaryDirectory(prefix="forge-ocr-") as td:
         shutil.copy2(image, Path(td) / "frame.png")
         findings = classify(backend.read_folder(Path(td)), known_text)
-    return _result(name, backend, findings, image.name)
+    return _result(name, backend, findings, label or image.name)

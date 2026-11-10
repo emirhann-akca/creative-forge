@@ -172,7 +172,9 @@ class Pipeline:
                 if h.edit_region:  # the model's pixels survive only inside the region it was allowed to change
                     edited = restore_outside(first, edited, h.edit_region, work / "first_frame.png")
                 first = edited
-            res.pre_checks.append(check_image_text(first, spec.qa.known_text, self.ocr, "first_frame_text"))
+            res.pre_checks.append(
+                check_image_text(first, spec.qa.known_text, self.ocr, "first_frame_text", "the first frame")
+            )
 
             self.log(f"[{c.id}] hook video ({h.samples} x {h.duration_s}s)")
             clips = self.gen.video(
