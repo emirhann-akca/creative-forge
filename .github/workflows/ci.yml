@@ -163,6 +163,8 @@ jobs:
           $ocr = $d.items | Where-Object name -eq 'ocr'
           Write-Output "ffmpeg: $($ff.summary)"
           Write-Output "ocr: $($ocr.summary)"
+          # public evidence (annotations are readable without signing in): what this runner actually uses
+          Write-Output "::notice title=doctor (${{ matrix.os }}, ${{ matrix.via }})::ffmpeg $($ff.details.source): $($ff.details.version) | AAC encoders that open: $($ff.details.aac_encoders -join ', ') | $($ocr.summary)"
           if ($ff.details.source -ne 'managed') { Write-Output "::error title=ffmpeg source::expected the managed build, got $($ff.details.source)"; exit 1 }
           if ($ocr.status -ne 'ok') { Write-Output "::error title=ocr::$($ocr.summary)"; exit 1 }
       - name: forge demo, review, publish and ui in a directory with Turkish characters
