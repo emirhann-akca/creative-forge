@@ -10,7 +10,7 @@ from creative_forge.spec import ExportSpec
 
 def maxrate_for(duration_s: float, e: ExportSpec) -> int:
     """Video maxrate (kbps) that keeps video + audio under ``max_file_mb`` with 5 % container headroom.
-    Production: crf 20 + maxrate 3.6M kept a 60 s ad at ~27 MB (crf 18 alone was 46 MB)."""
+    Production used crf 20 + maxrate 3.6M to keep 60 s ads under the 30 MB cap."""
     budget_kbps = e.max_file_mb * 8000 * 0.95 / max(1.0, duration_s) - e.audio_bitrate_kbps
     return int(max(300, min(e.maxrate_kbps, budget_kbps)))
 

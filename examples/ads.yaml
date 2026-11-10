@@ -18,7 +18,7 @@ render:
 
 export:
   crf: 20
-  maxrate_kbps: 3600        # with crf 20 this kept a 60 s ad near 27 MB
+  maxrate_kbps: 3600        # with crf 20 this keeps a 60 s ad under 30 MB
   max_file_mb: 30
 
 audio:
