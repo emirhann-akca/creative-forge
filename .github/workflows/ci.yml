@@ -80,9 +80,16 @@ jobs:
         shell: bash
     env:
       CREATIVE_FORGE_REQUIRE_OCR: rapidocr # the RapidOCR tests fail instead of skipping if the backend is missing
+      CREATIVE_FORGE_HOME: ${{ github.workspace }}/.forge-home
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      # Nine jobs need the same pinned build; download it once per OS and pin, not nine times from its publishers.
+      # The user-install jobs below always download it fresh, the way a user does.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .forge-home/data/ffmpeg
+          key: ffmpeg-${{ runner.os }}-${{ hashFiles('creative_forge/setup_ffmpeg.py') }}
       - name: Install (Python ${{ matrix.python }}, editable, with the ocr extra)
         run: |
           uv venv --python "${{ matrix.python }}" .venv
@@ -164,7 +171,8 @@ jobs:
           Write-Output "ffmpeg: $($ff.summary)"
           Write-Output "ocr: $($ocr.summary)"
           # public evidence (annotations are readable without signing in): what this runner actually uses
-          Write-Output "::notice title=doctor (${{ matrix.os }}, ${{ matrix.via }})::ffmpeg $($ff.details.source): $($ff.details.version) | AAC encoders that open: $($ff.details.aac_encoders -join ', ') | $($ocr.summary)"
+          $py = $d.items | Where-Object name -eq 'python'
+          Write-Output "::notice title=doctor ${{ matrix.os }} job ${{ strategy.job-index }}::$($py.details.platform) | ffmpeg $($ff.details.source): $($ff.details.version) | AAC encoders that open: $($ff.details.aac_encoders -join ' ') | $($ocr.summary)"
           if ($ff.details.source -ne 'managed') { Write-Output "::error title=ffmpeg source::expected the managed build, got $($ff.details.source)"; exit 1 }
           if ($ocr.status -ne 'ok') { Write-Output "::error title=ocr::$($ocr.summary)"; exit 1 }
       - name: forge demo, review, publish and ui in a directory with Turkish characters

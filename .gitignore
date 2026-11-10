@@ -17,6 +17,7 @@ htmlcov/
 # Pipeline outputs and caches (generated media, paid generations)
 out/
 .forge-cache/
+.forge-home/
 .forge-work/
 *.mp4
 *.m4a
