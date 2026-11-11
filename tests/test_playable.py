@@ -122,7 +122,8 @@ def run(path: Path, network: str) -> dict[str, str]:
 
 @pytest.mark.parametrize("network", ["applovin", "unity", "meta", "google", "tiktok"])
 def test_good_builds_pass_in_the_browser(tmp_path, network):
-    found = run(write(tmp_path, network), network)
+    name = "Oyun Ş deneme.html" if network in ("applovin", "meta") else None  # served under a quoted URL
+    found = run(write(tmp_path, network, name=name), network)
     trace = json.loads(found.pop("__trace__"))
     assert {r: s for r, s in found.items() if s not in (PASS, "info")} == {}, (found, trace["record"].get("calls"))
     calls = trace["record"]["calls"]

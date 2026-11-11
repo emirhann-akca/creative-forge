@@ -29,6 +29,7 @@ import shutil
 import tempfile
 import threading
 import time
+import urllib.parse
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from importlib import resources
@@ -186,7 +187,7 @@ def _drive(browser, origin, index, bundle, net, trace, render_timeout_s, settle_
     page = ctx.new_page()
     page.on("pageerror", lambda e: trace.errors.append(str(e)[:300]))
     page.on("console", lambda m: trace.console_errors.append(m.text[:300]) if m.type == "error" else None)
-    trace.url = f"{origin}/{index}"
+    trace.url = f"{origin}/{urllib.parse.quote(index)}"  # a file name with spaces or non-ASCII letters
     t0 = time.monotonic()
     try:
         page.goto(trace.url, wait_until="load", timeout=int(render_timeout_s * 1000) + 15000)
