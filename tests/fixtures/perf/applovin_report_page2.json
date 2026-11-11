@@ -1,0 +1,28 @@
+{
+ "code": 200,
+ "count": 2,
+ "results": [
+  {
+   "day": "2026-10-21",
+   "campaign": "AM iOS TR",
+   "creative_set": "cf1.puzzle-ads.dust-blower.blower.lvl7.tryit.4x5.en.36d3704762",
+   "creative_set_id": "9a1b2c3d",
+   "country": "tr",
+   "impressions": "42000",
+   "clicks": "540",
+   "conversions": "215",
+   "cost": "160.00"
+  },
+  {
+   "day": "2026-10-21",
+   "campaign": "AM iOS TR",
+   "creative_set": "cf1.puzzle-ads.oops.wrong-move.lvl7.tryit.4x5.en.1d4e68cf56",
+   "creative_set_id": "9a1b2c3e",
+   "country": "tr",
+   "impressions": "39000",
+   "clicks": "630",
+   "conversions": "401",
+   "cost": "151.90"
+  }
+ ]
+}

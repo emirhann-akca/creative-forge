@@ -239,6 +239,30 @@ concepts:
 
 Each export's `.forge.json` sidecar holds `creative_id`, `ad_name`, the seven `ids`, the `tags` and the `models` that made it with their licences; `report.json` carries the ID, name and tags, and `forge publish` copies all of it into `manifest.json`. `forge ideate` drafts fill `hook_type` and `emotion` from the taxonomy's values and leave `mechanic_shown` to a person.
 
+## Performance import
+
+```bash
+export CREATIVE_FORGE_META_TOKEN=...          # ads_read; from the environment only, never a file or a flag
+forge perf import meta --account act_123 --since 2026-10-01 --until 2026-10-31 [--by-country]
+export CREATIVE_FORGE_APPLOVIN_KEY=...        # AppLovin Report Key
+forge perf import applovin --since 2026-10-20 --until 2026-10-31 [--assets]
+forge perf import csv tiktok_export.csv --network tiktok      # also unity, google, mintegral, ... exports
+forge perf register deliver/manifest.json                      # creative IDs + tags of what was published
+```
+
+Rows go into one SQLite file (`perf.sqlite` in the user data folder, `--db` to move it): one row per network ad unit per day (Meta ad, AppLovin creative set; an AppLovin asset per report window), keyed on (network, account, level, date, ad, country). Every write is an upsert, so re-importing a range replaces rows instead of adding them. Each row's network ad name is searched for a creative-forge ad name (`naming.find`), which sets its `creative_id`; names that are not ours are kept and listed after the import as unmatched.
+
+| Source | Request | What is stored |
+|---|---|---|
+| Meta | `GET /v27.0/act_<id>/insights`, `level=ad`, `time_increment=1`, cursor pagination | impressions, clicks, spend; installs = the first of `mobile_app_install` / `app_install` / `omni_app_install` (they overlap, so never summed); `video_view`, which Meta labels "3-Second Video Views" (the hook-rate numerator); `video_p25…p100_watched_actions`; thruplay |
+| AppLovin | `GET r.applovin.com/report`, `report_type=advertiser`, columns incl. `creative_set_id`, `conversions`; `limit`/`offset` pagination; last 45 days only | impressions, clicks, cost, installs per creative set per day |
+| AppLovin assets | `GET r.applovin.com/assetAnalyticsReport` (`--assets`) | impressions, clicks, cost per asset over the window; no installs exist at this level, and each asset joins its creative set's creative ID |
+| CSV | any export with a date, an ad name and impressions; headers matched case-insensitively, `--column FIELD=HEADER` for the rest; UTF-8/UTF-16, `,` `;` or tab | the same metrics; TikTok's 2- and 6-second views go into their own columns and are never compared with Meta's 3-second views |
+
+Tokens: Meta's goes in an `Authorization: Bearer` header, and the `access_token` Meta puts into its `paging.next` links is removed before the next page is fetched. AppLovin accepts its key only as a URL parameter, and `requests` writes the URL into its exception messages, so transport errors are re-raised with only the exception class and host, outside the `except` block (no chained exception holds the URL), and every log line passes through a redactor. Tests check that neither secret reaches a log line, an exception chain, the terminal or the SQLite file. Retries cover HTTP 429/5xx, Meta's throttling codes (4, 17, 32, 613, 80000–80014) and `Retry-After`; when Meta's `x-fb-ads-insights-throttle` header reports 75 % of a quota used, the next page waits.
+
+**Not run against the live APIs**: no tokens were available. The clients follow the documentation cited in the module docstrings (read on 11 Nov 2026) and are tested against fixtures shaped like those documents (`tests/fixtures/perf/`); AppLovin's pages do not document the JSON envelope, so both `{"results": [...]}` and a bare list are accepted.
+
 ## `forge ideate`: concepts from a tool-calling model
 
 Gemini drafts N hook concepts and can only act through tools: `search_creative_library` (retrieval over [the 14 production lessons and five synthetic past concepts](creative_forge/data/library.yaml)), `list_gameplay_clips`, `lint_concept`, `estimate_cost` and `submit_concepts`. A submission is accepted only when every concept passes `AdSpec` validation and the lint rules; then it is written as a spec that `forge plan` and `forge run` load. Embeddings come from an offline hashing embedder by default or Vertex `text-embedding-005` (`--embedder vertex`), cached in a small JSON index file, not a vector database. `--llm fake` plays back a scripted session in Gemini's response format, which is also what the tests use.
@@ -271,7 +295,7 @@ The suite also checks `duration` (spec window), `loudness` (−14.3 LUFS ± 1 LU
 ## Limitations
 
 - Built around one studio's goods-sort puzzle ads. The defaults (end card, layout, judge rubric) reflect that.
-- There is no ad-performance data yet. QA measures technical correctness and an LLM's opinion, not CPI or IPM.
+- The performance importers have only been run against fixtures, not live network APIs (see [Performance import](#performance-import)).
 - In this repo the Veo, Gemini Image, Lyria and judge providers are tested against mocked HTTP only. Their request shapes come from the production scripts, except Lyria, which follows Vertex AI's documented `:predict` shape because the October script for it was not kept. Gemini function calling, `text-embedding-005` and the ComfyUI provider were each run for real, as described above.
 - Lint rules are regular expressions. They catch the phrasings behind real defects, not every semantic mistake.
 - OCR: Apple Vision on macOS (compiled on first use with `swiftc`), RapidOCR on Windows and Linux with the `[ocr]` extra; the tesseract fallback is weaker on stylized game fonts. With no backend, the OCR checks report `skip`.

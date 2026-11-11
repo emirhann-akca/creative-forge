@@ -1,0 +1,106 @@
+{
+ "run": "puzzle-ads",
+ "published_at": "2026-10-18T10:00:00+00:00",
+ "exports": [
+  {
+   "file": "cf1.puzzle-ads.dust-blower.blower.lvl7.tryit.9x16.en.e252faa195.mp4",
+   "ad_name": "cf1.puzzle-ads.dust-blower.blower.lvl7.tryit.9x16.en.e252faa195",
+   "creative_id": "e252faa195",
+   "tags": {
+    "hook_type": "satisfying-clean",
+    "emotion": [
+     "satisfaction"
+    ],
+    "format": "9x16",
+    "length_bucket": "s16-30",
+    "ai_generated": "yes"
+   }
+  },
+  {
+   "file": "cf1.puzzle-ads.dust-blower.washer.lvl7.tryit.9x16.en.7a85393952.mp4",
+   "ad_name": "cf1.puzzle-ads.dust-blower.washer.lvl7.tryit.9x16.en.7a85393952",
+   "creative_id": "7a85393952",
+   "tags": {
+    "hook_type": "satisfying-clean",
+    "emotion": [
+     "satisfaction",
+     "calm"
+    ],
+    "format": "9x16",
+    "length_bucket": "s16-30",
+    "ai_generated": "yes"
+   }
+  },
+  {
+   "file": "cf1.puzzle-ads.oops.wrong-move.lvl7.tryit.9x16.en.fc972ce8b2.mp4",
+   "ad_name": "cf1.puzzle-ads.oops.wrong-move.lvl7.tryit.9x16.en.fc972ce8b2",
+   "creative_id": "fc972ce8b2",
+   "tags": {
+    "hook_type": "fail-state",
+    "emotion": [
+     "frustration"
+    ],
+    "format": "9x16",
+    "length_bucket": "s16-30",
+    "ai_generated": "yes"
+   }
+  },
+  {
+   "file": "cf1.puzzle-ads.oops.last-move.lvl7.tryit.9x16.en.d11da6a3b3.mp4",
+   "ad_name": "cf1.puzzle-ads.oops.last-move.lvl7.tryit.9x16.en.d11da6a3b3",
+   "creative_id": "d11da6a3b3",
+   "tags": {
+    "hook_type": "fail-state",
+    "emotion": [
+     "frustration",
+     "humor"
+    ],
+    "format": "9x16",
+    "length_bucket": "s16-30",
+    "ai_generated": "yes"
+   }
+  },
+  {
+   "file": "cf1.puzzle-ads.oops.tiny.lvl7.tryit.9x16.en.cd1924d01f.mp4",
+   "ad_name": "cf1.puzzle-ads.oops.tiny.lvl7.tryit.9x16.en.cd1924d01f",
+   "creative_id": "cd1924d01f",
+   "tags": {
+    "hook_type": "fail-state",
+    "emotion": [
+     "humor"
+    ],
+    "format": "9x16",
+    "length_bucket": "s00-15",
+    "ai_generated": "yes"
+   }
+  },
+  {
+   "file": "cf1.puzzle-ads.dust-blower.blower.lvl7.tryit.4x5.en.36d3704762.mp4",
+   "ad_name": "cf1.puzzle-ads.dust-blower.blower.lvl7.tryit.4x5.en.36d3704762",
+   "creative_id": "36d3704762",
+   "tags": {
+    "hook_type": "satisfying-clean",
+    "emotion": [
+     "satisfaction"
+    ],
+    "format": "4x5",
+    "length_bucket": "s16-30",
+    "ai_generated": "yes"
+   }
+  },
+  {
+   "file": "cf1.puzzle-ads.oops.wrong-move.lvl7.tryit.4x5.en.1d4e68cf56.mp4",
+   "ad_name": "cf1.puzzle-ads.oops.wrong-move.lvl7.tryit.4x5.en.1d4e68cf56",
+   "creative_id": "1d4e68cf56",
+   "tags": {
+    "hook_type": "fail-state",
+    "emotion": [
+     "frustration"
+    ],
+    "format": "4x5",
+    "length_bucket": "s16-30",
+    "ai_generated": "yes"
+   }
+  }
+ ]
+}

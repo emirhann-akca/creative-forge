@@ -27,6 +27,7 @@
 | `doctor.py` | `forge doctor`: ffmpeg, OCR, folders, optional ComfyUI and ADC presence as `ok/warn/fail/info` items; text or JSON. |
 | `paths.py`, `fsutil.py` | platformdirs locations (`CREATIVE_FORGE_HOME` overrides) and renames/deletes that retry while Windows reports a sharing violation. |
 | `ui/` | `forge ui`: FastAPI + Jinja2 + vendored htmx. Runs list, report, range-request players, approve/reject through `review.decide`, background demo, doctor. Loopback `Host` check and a per-process token on every POST. |
+| `perf/` | `store.py`: SQLite (`perf_rows`, `creatives`, `imports`) with upserts on (network, account, level, date, date_end, ad, country). `http.py`: GET with retries, `Retry-After`, a `Redactor` and transport errors re-raised without their URL. `meta.py`, `applovin.py`, `csvimport.py`: the importers. `commands.py`: `forge perf`. |
 | `ideate/` | `library.py`: lesson library, hashing or Vertex embedder, JSON vector index. `tools.py`: function declarations and their local implementations. `agent.py`: the function-calling loop, the Vertex chat model and the scripted one. |
 
 ## One concept, step by step

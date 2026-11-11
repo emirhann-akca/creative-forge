@@ -466,6 +466,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sdoc.set_defaults(fn=cmd_doctor)
 
+    from creative_forge.perf.commands import add_parser as add_perf
+
+    add_perf(sub)
+
     sui = sub.add_parser("ui", help="local web page: runs, QA reports, players, approve / reject, demo, doctor")
     sui.add_argument("--root", default="out", help="folder searched for runs (default: out)")
     sui.add_argument("--host", default="127.0.0.1", help="bind address; anything but loopback exposes the page")

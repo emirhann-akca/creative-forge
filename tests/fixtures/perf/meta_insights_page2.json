@@ -1,0 +1,366 @@
+{
+ "data": [
+  {
+   "ad_id": "120210000000000001",
+   "ad_name": "cf1.puzzle-ads.dust-blower.blower.lvl7.tryit.9x16.en.e252faa195",
+   "adset_name": "TR | broad",
+   "campaign_name": "UA test week 45",
+   "account_currency": "USD",
+   "impressions": "60000",
+   "clicks": "900",
+   "spend": "300.00",
+   "actions": [
+    {
+     "action_type": "link_click",
+     "value": "900"
+    },
+    {
+     "action_type": "video_view",
+     "value": "15000"
+    },
+    {
+     "action_type": "mobile_app_install",
+     "value": "360"
+    },
+    {
+     "action_type": "omni_app_install",
+     "value": "360"
+    }
+   ],
+   "video_p25_watched_actions": [
+    {
+     "action_type": "video_view",
+     "value": "9000"
+    }
+   ],
+   "video_p50_watched_actions": [
+    {
+     "action_type": "video_view",
+     "value": "6000"
+    }
+   ],
+   "video_p75_watched_actions": [
+    {
+     "action_type": "video_view",
+     "value": "4200"
+    }
+   ],
+   "video_p95_watched_actions": [
+    {
+     "action_type": "video_view",
+     "value": "3300"
+    }
+   ],
+   "video_p100_watched_actions": [
+    {
+     "action_type": "video_view",
+     "value": "3000"
+    }
+   ],
+   "video_thruplay_watched_actions": [
+    {
+     "action_type": "video_view",
+     "value": "4000"
+    }
+   ],
+   "date_start": "2026-10-21",
+   "date_stop": "2026-10-21"
+  },
+  {
+   "ad_id": "120210000000000002",
+   "ad_name": "cf1.puzzle-ads.dust-blower.washer.lvl7.tryit.9x16.en.7a85393952",
+   "adset_name": "TR | broad",
+   "campaign_name": "UA test week 45",
+   "account_currency": "USD",
+   "impressions": "50000",
+   "clicks": "700",
+   "spend": "260.50",
+   "actions": [
+    {
+     "action_type": "link_click",
+     "value": "700"
+    },
+    {
+     "action_type": "video_view",
+     "value": "11000"
+    },
+    {
+     "action_type": "mobile_app_install",
+     "value": "290"
+    },
+    {
+     "action_type": "omni_app_install",
+     "value": "290"
+    }
+   ],
+   "video_p25_watched_actions": [
+    {
+     "action_type": "video_view",
+     "value": "7000"
+    }
+   ],
+   "video_p50_watched_actions": [
+    {
+     "action_type": "video_view",
+     "value": "4500"
+    }
+   ],
+   "video_p75_watched_actions": [
+    {
+     "action_type": "video_view",
+     "value": "3100"
+    }
+   ],
+   "video_p95_watched_actions": [
+    {
+     "action_type": "video_view",
+     "value": "2400"
+    }
+   ],
+   "video_p100_watched_actions": [
+    {
+     "action_type": "video_view",
+     "value": "2200"
+    }
+   ],
+   "video_thruplay_watched_actions": [
+    {
+     "action_type": "video_view",
+     "value": "3000"
+    }
+   ],
+   "date_start": "2026-10-21",
+   "date_stop": "2026-10-21"
+  },
+  {
+   "ad_id": "120210000000000003",
+   "ad_name": "cf1.puzzle-ads.oops.wrong-move.lvl7.tryit.9x16.en.fc972ce8b2 - Copy",
+   "adset_name": "TR | broad",
+   "campaign_name": "UA test week 45",
+   "account_currency": "USD",
+   "impressions": "55000",
+   "clicks": "1100",
+   "spend": "290.00",
+   "actions": [
+    {
+     "action_type": "link_click",
+     "value": "1100"
+    },
+    {
+     "action_type": "video_view",
+     "value": "19800"
+    },
+    {
+     "action_type": "mobile_app_install",
+     "value": "690"
+    },
+    {
+     "action_type": "omni_app_install",
+     "value": "690"
+    }
+   ],
+   "video_p25_watched_actions": [
+    {
+     "action_type": "video_view",
+     "value": "12000"
+    }
+   ],
+   "video_p50_watched_actions": [
+    {
+     "action_type": "video_view",
+     "value": "8000"
+    }
+   ],
+   "video_p75_watched_actions": [
+    {
+     "action_type": "video_view",
+     "value": "6000"
+    }
+   ],
+   "video_p95_watched_actions": [
+    {
+     "action_type": "video_view",
+     "value": "5000"
+    }
+   ],
+   "video_p100_watched_actions": [
+    {
+     "action_type": "video_view",
+     "value": "4600"
+    }
+   ],
+   "video_thruplay_watched_actions": [
+    {
+     "action_type": "video_view",
+     "value": "6000"
+    }
+   ],
+   "date_start": "2026-10-21",
+   "date_stop": "2026-10-21"
+  },
+  {
+   "ad_id": "120210000000000004",
+   "ad_name": "cf1.puzzle-ads.oops.last-move.lvl7.tryit.9x16.en.d11da6a3b3",
+   "adset_name": "TR | broad",
+   "campaign_name": "UA test week 45",
+   "account_currency": "USD",
+   "impressions": "45000",
+   "clicks": "850",
+   "spend": "240.00",
+   "actions": [
+    {
+     "action_type": "link_click",
+     "value": "850"
+    },
+    {
+     "action_type": "video_view",
+     "value": "15300"
+    },
+    {
+     "action_type": "mobile_app_install",
+     "value": "520"
+    },
+    {
+     "action_type": "omni_app_install",
+     "value": "520"
+    }
+   ],
+   "video_p25_watched_actions": [
+    {
+     "action_type": "video_view",
+     "value": "9500"
+    }
+   ],
+   "video_p50_watched_actions": [
+    {
+     "action_type": "video_view",
+     "value": "6300"
+    }
+   ],
+   "video_p75_watched_actions": [
+    {
+     "action_type": "video_view",
+     "value": "4700"
+    }
+   ],
+   "video_p95_watched_actions": [
+    {
+     "action_type": "video_view",
+     "value": "3900"
+    }
+   ],
+   "video_p100_watched_actions": [
+    {
+     "action_type": "video_view",
+     "value": "3600"
+    }
+   ],
+   "video_thruplay_watched_actions": [
+    {
+     "action_type": "video_view",
+     "value": "4800"
+    }
+   ],
+   "date_start": "2026-10-21",
+   "date_stop": "2026-10-21"
+  },
+  {
+   "ad_id": "120210000000000005",
+   "ad_name": "cf1.puzzle-ads.oops.tiny.lvl7.tryit.9x16.en.cd1924d01f",
+   "adset_name": "TR | broad",
+   "campaign_name": "UA test week 45",
+   "account_currency": "USD",
+   "impressions": "300",
+   "clicks": "9",
+   "spend": "1.60",
+   "actions": [
+    {
+     "action_type": "link_click",
+     "value": "9"
+    },
+    {
+     "action_type": "video_view",
+     "value": "120"
+    },
+    {
+     "action_type": "mobile_app_install",
+     "value": "9"
+    },
+    {
+     "action_type": "omni_app_install",
+     "value": "9"
+    }
+   ],
+   "video_p25_watched_actions": [
+    {
+     "action_type": "video_view",
+     "value": "80"
+    }
+   ],
+   "video_p50_watched_actions": [
+    {
+     "action_type": "video_view",
+     "value": "60"
+    }
+   ],
+   "video_p75_watched_actions": [
+    {
+     "action_type": "video_view",
+     "value": "40"
+    }
+   ],
+   "video_p95_watched_actions": [
+    {
+     "action_type": "video_view",
+     "value": "30"
+    }
+   ],
+   "video_p100_watched_actions": [
+    {
+     "action_type": "video_view",
+     "value": "25"
+    }
+   ],
+   "video_thruplay_watched_actions": [
+    {
+     "action_type": "video_view",
+     "value": "35"
+    }
+   ],
+   "date_start": "2026-10-21",
+   "date_stop": "2026-10-21"
+  },
+  {
+   "ad_id": "120210000000000006",
+   "ad_name": "Old static banner (manual)",
+   "adset_name": "TR | broad",
+   "campaign_name": "UA test week 45",
+   "account_currency": "USD",
+   "impressions": "10000",
+   "clicks": "80",
+   "spend": "40.00",
+   "actions": [
+    {
+     "action_type": "link_click",
+     "value": "80"
+    },
+    {
+     "action_type": "mobile_app_install",
+     "value": "20"
+    },
+    {
+     "action_type": "omni_app_install",
+     "value": "20"
+    }
+   ],
+   "date_start": "2026-10-21",
+   "date_stop": "2026-10-21"
+  }
+ ],
+ "paging": {
+  "cursors": {
+   "before": "MjUZD",
+   "after": "NDgZD"
+  }
+ }
+}

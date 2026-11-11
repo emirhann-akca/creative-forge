@@ -1,0 +1,26 @@
+{
+ "code": 200,
+ "count": 2,
+ "results": [
+  {
+   "asset_id": "a-771",
+   "asset_name": "IMG_0042_final.mp4",
+   "creative_set": "cf1.puzzle-ads.dust-blower.blower.lvl7.tryit.4x5.en.36d3704762",
+   "creative_set_id": "9a1b2c3d",
+   "campaign": "AM iOS TR",
+   "impressions": "82000",
+   "clicks": "1060",
+   "cost": "310.25"
+  },
+  {
+   "asset_id": "a-772",
+   "asset_name": "endcard_v3.png",
+   "creative_set": "cf1.puzzle-ads.oops.wrong-move.lvl7.tryit.4x5.en.1d4e68cf56",
+   "creative_set_id": "9a1b2c3e",
+   "campaign": "AM iOS TR",
+   "impressions": "77000",
+   "clicks": "1240",
+   "cost": "301.00"
+  }
+ ]
+}
