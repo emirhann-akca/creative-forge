@@ -103,14 +103,29 @@
     } else {
         $wheelDir = Join-Path ([IO.Path]::GetTempPath()) ("forge-wheel-" + [guid]::NewGuid().ToString('N'))
         New-Item -ItemType Directory -Path $wheelDir | Out-Null
+        # Windows PowerShell 5.1 sometimes sees GitHub close the connection on a 404 instead of reading the
+        # response: no keep-alive, and up to three tries until the server's status code is known.
         $status = 0
-        try {
-            Invoke-WebRequest -Uri $ReleaseUrl -OutFile (Join-Path $wheelDir $Wheel) -UseBasicParsing
-            $status = 200
-        } catch {
-            $response = $_.Exception.Response
-            if ($response) { $status = [int]$response.StatusCode }
-            if ($status -ne 404) { throw "forge-install: could not download $ReleaseUrl ($($_.Exception.Message))" }
+        $lastError = ''
+        for ($attempt = 1; $attempt -le 3 -and $status -eq 0; $attempt++) {
+            try {
+                Invoke-WebRequest -Uri $ReleaseUrl -OutFile (Join-Path $wheelDir $Wheel) -UseBasicParsing -DisableKeepAlive
+                $status = 200
+            } catch {
+                $lastError = $_.Exception.Message
+                $response = $_.Exception.Response
+                if ($response) { $status = [int]$response.StatusCode }
+                if ($status -eq 0) { Start-Sleep -Seconds (2 * $attempt) }
+            }
+        }
+        $curl = Get-Command curl.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($status -eq 0 -and $curl) {
+            # curl.exe ships with Windows 10 1803+ and reads the status code where .NET could not
+            $code = & $curl.Source -s -L --retry 2 -o (Join-Path $wheelDir $Wheel) -w '%{http_code}' $ReleaseUrl
+            if ("$code" -match '^\d{3}$') { $status = [int]"$code" }
+        }
+        if ($status -ne 200 -and $status -ne 404) {
+            throw "forge-install: could not download $ReleaseUrl (HTTP $status; $lastError)"
         }
         if ($status -eq 200) {
             $Source = Join-Path $wheelDir $Wheel
