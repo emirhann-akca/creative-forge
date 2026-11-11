@@ -4,7 +4,7 @@ One export is one creative: (spec, concept, hook, gameplay segment, end card, fo
 those seven names, so a re-render of the same variant keeps its ID, and its ad name carries all seven plus the ID:
 
     cf1.<spec>.<concept>.<hook>.<segment>.<end_card>.<format>.<language>.<creative_id>
-    cf1.puzzle-ads.dust-blower.blower.lvl21.fill.9x16.tr.4be1d0c2a9
+    cf1.puzzle-ads.dust-blower.blower.lvl21.fill.9x16.tr.91c97d00dc
 
 ``parse(name)`` gives the seven names back and checks the ID against them, so a hand-edited or truncated name is
 rejected instead of being booked against the wrong creative. ``find(text)`` locates such a name inside a longer
