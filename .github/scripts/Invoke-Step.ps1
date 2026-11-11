@@ -1,8 +1,10 @@
 # Dot-source, then: Invoke-Step 'title' { native command ... }
 # If the block's last native command fails, the tail of its output becomes an error annotation on the check run
-# (readable without signing in, unlike job logs) and the step exits with that code.
+# (readable without signing in, unlike job logs) and the step exits with that code. $global:LastStepLog holds the
+# path of the step's full output afterwards.
 function Invoke-Step([string]$Title, [scriptblock]$Block) {
     $log = Join-Path $env:RUNNER_TEMP ("step-" + [guid]::NewGuid().ToString('N') + ".log")
+    $global:LastStepLog = $log
     $global:LASTEXITCODE = 0
     $failure = $null
     try {

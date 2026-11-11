@@ -64,6 +64,32 @@ def test_installers_run_setup_and_doctor():
 @pytest.mark.parametrize("path", [SH, PS1])
 def test_installers_name_the_release_assets_that_release_yml_attaches(path):
     release = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert path.name in release
-    assert "releases/latest/download/" + path.name in path.read_text(encoding="utf-8")
-    assert MANAGED_VERSION in (ROOT / "README.md").read_text(encoding="utf-8")
+    raw = "https://raw.githubusercontent.com/emirhann-akca/creative-forge/main/" + path.name
+    assert raw in path.read_text(encoding="utf-8")  # the header shows the one-liner a user runs
+    assert raw in readme and "releases/latest/download/" + path.name in readme  # primary, and "when a release exists"
+    assert MANAGED_VERSION in readme
+
+
+@pytest.mark.parametrize("path", [SH, PS1])
+def test_installers_fall_back_to_the_main_archive_on_a_404(path):
+    """No release yet: the release wheel URL answers 404 and the installer must install the main branch's source
+    archive instead, saying so. CI runs this path for real in the "release 404" user-install jobs."""
+    text = path.read_text(encoding="utf-8")
+    assert "archive/refs/heads/main.zip" in text and "404" in text
+    for setting in ("FORGE_SOURCE", "FORGE_RELEASE_URL", "FORGE_ARCHIVE_URL"):
+        assert setting in text
+    assert "source: release wheel" in text and "source: main branch source archive" in text
+    assert "source: FORGE_SOURCE=" in text
+    assert "--refresh-package" in text  # a branch archive keeps its URL while its contents change
+
+
+def test_ci_runs_the_readme_one_liners_literally():
+    ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    sh = re.search(r"^curl -LsSf https://raw\.githubusercontent\.com/\S+/main/install\.sh \| sh$", readme, re.M)
+    ps_line = r'^powershell -ExecutionPolicy Bypass -c "irm https://raw\.githubusercontent\.com/\S+/main/install\.ps1'
+    ps = re.search(ps_line + r' \| iex"$', readme, re.M)
+    assert sh and ps  # the patterns CI extracts with
+    assert "release 404, archive fallback" in ci and "FORGE_ARCHIVE_URL" in ci and "grep -m1 -E" in ci

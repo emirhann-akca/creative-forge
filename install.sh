@@ -1,15 +1,19 @@
 #!/bin/sh
-# creative-forge installer for macOS (Apple Silicon) and Linux (x86_64). No sudo, no system Python needed.
+# creative-forge installer for macOS (Apple Silicon) and Linux (x86_64). No sudo, no system Python, no git needed.
 #
-#   curl -LsSf https://github.com/emirhann-akca/creative-forge/releases/latest/download/install.sh | sh
+#   curl -LsSf https://raw.githubusercontent.com/emirhann-akca/creative-forge/main/install.sh | sh
 #
 # What it does, all inside your home directory:
 #   1. downloads uv (pinned version, SHA-256 checked against the value in this file) into the creative-forge data dir;
-#   2. `uv tool install creative-forge[ocr]` (uv downloads Python if needed) -> the `forge` command in ~/.local/bin;
+#   2. installs creative-forge[ocr] with `uv tool install` (uv downloads Python if needed) -> `forge` in ~/.local/bin.
+#      Source: the release wheel of this installer's version; if that release does not exist (HTTP 404), the source
+#      archive of the main branch, which uv builds locally (no git needed). The installer prints which one it used;
 #   3. `forge setup ffmpeg` (pinned ffmpeg 9.0.2, SHA-256 checked) and `forge doctor`.
 #
 # Settings (environment variables):
-#   FORGE_SOURCE          what to install instead of the release wheel: a wheel path or URL, or a git+https URL
+#   FORGE_SOURCE          install this instead: a wheel path or URL, a source archive URL (.zip / .tar.gz)
+#   FORGE_RELEASE_URL     the release wheel to try first (default: this version's wheel on GitHub Releases)
+#   FORGE_ARCHIVE_URL     the source archive used when the release wheel is missing (default: the main branch)
 #   FORGE_PYTHON          Python version for the tool environment (default 3.13)
 #   FORGE_NO_MODIFY_PATH  1 = do not add ~/.local/bin to your shell profile
 set -eu
@@ -18,7 +22,9 @@ FORGE_VERSION="0.2.0"
 UV_VERSION="0.13.7"
 REPO="emirhann-akca/creative-forge"
 PYTHON="${FORGE_PYTHON:-3.13}"
-SOURCE="${FORGE_SOURCE:-https://github.com/$REPO/releases/download/v$FORGE_VERSION/creative_forge-$FORGE_VERSION-py3-none-any.whl}"
+WHEEL="creative_forge-$FORGE_VERSION-py3-none-any.whl"
+RELEASE_URL="${FORGE_RELEASE_URL:-https://github.com/$REPO/releases/download/v$FORGE_VERSION/$WHEEL}"
+ARCHIVE_URL="${FORGE_ARCHIVE_URL:-https://github.com/$REPO/archive/refs/heads/main.zip}"
 
 say() { printf 'forge-install: %s\n' "$*"; }
 fail() {
@@ -31,6 +37,20 @@ download() { # url file
         curl --proto '=https' --tlsv1.2 -fsSL --retry 3 -o "$2" "$1"
     elif command -v wget >/dev/null 2>&1; then
         wget -q --https-only -O "$2" "$1"
+    else
+        fail "need curl or wget"
+    fi
+}
+
+# Prints the HTTP status of downloading $1 into $2 (000 when the server was not reached).
+fetch_status() { # url file
+    if command -v curl >/dev/null 2>&1; then
+        curl --proto '=https' --tlsv1.2 -sSL --retry 3 -o "$2" -w '%{http_code}' "$1" || true
+    elif command -v wget >/dev/null 2>&1; then
+        if wget -q --https-only -O "$2" "$1"; then echo 200; else
+            rc=$?
+            if [ "$rc" -eq 8 ]; then echo 404; else echo 000; fi # 8: the server answered with an error
+        fi
     else
         fail "need curl or wget"
     fi
@@ -84,12 +104,36 @@ main() {
         chmod 755 "$uv_dir/uv"
     fi
 
-    case "$SOURCE" in
-        /*) spec="creative-forge[ocr] @ file://$SOURCE" ;;
-        *) spec="creative-forge[ocr] @ $SOURCE" ;;
+    wheel_dir=""
+    if [ -n "${FORGE_SOURCE:-}" ]; then
+        source="$FORGE_SOURCE"
+        say "source: FORGE_SOURCE=$source"
+    else
+        wheel_dir=$(mktemp -d)
+        status=$(fetch_status "$RELEASE_URL" "$wheel_dir/$WHEEL")
+        case "$status" in
+            200)
+                source="$wheel_dir/$WHEEL"
+                say "source: release wheel v$FORGE_VERSION ($RELEASE_URL)"
+                ;;
+            404)
+                source="$ARCHIVE_URL"
+                say "no release wheel for v$FORGE_VERSION (HTTP 404 at $RELEASE_URL)"
+                say "source: main branch source archive ($source); uv builds it, no git needed"
+                ;;
+            *) fail "could not download $RELEASE_URL (HTTP $status); check the connection and retry" ;;
+        esac
+    fi
+    case "$source" in
+        /*) spec="creative-forge[ocr] @ file://$source" ;;
+        *) spec="creative-forge[ocr] @ $source" ;;
     esac
-    say "installing creative-forge from $SOURCE (Python $PYTHON; uv downloads it if missing)"
-    "$uv" tool install --force --compile-bytecode --python "$PYTHON" "$spec"
+    say "installing creative-forge (Python $PYTHON; uv downloads it if missing)"
+    # --refresh-package: a branch archive keeps its URL while its contents change
+    "$uv" tool install --force --refresh-package creative-forge --compile-bytecode --python "$PYTHON" "$spec"
+    if [ -n "${wheel_dir:-}" ]; then
+        rm -rf "$wheel_dir"
+    fi
 
     bin=$("$uv" tool dir --bin)
     if [ "${FORGE_NO_MODIFY_PATH:-0}" != "1" ] && [ "${UV_NO_MODIFY_PATH:-0}" != "1" ]; then

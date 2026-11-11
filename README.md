@@ -91,36 +91,50 @@ Providers sit behind small interfaces (`ImageEditProvider`, `VideoProvider`, `Mu
 **macOS (Apple Silicon) and Linux (x86_64)**, in a terminal:
 
 ```sh
-curl -LsSf https://github.com/emirhann-akca/creative-forge/releases/latest/download/install.sh | sh
+curl -LsSf https://raw.githubusercontent.com/emirhann-akca/creative-forge/main/install.sh | sh
 ```
 
 **Windows 10/11 (x64)**, in PowerShell:
 
 ```powershell
+powershell -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/emirhann-akca/creative-forge/main/install.ps1 | iex"
+```
+
+(In PowerShell 7 the same line works with `pwsh` in place of `powershell`.)
+
+Each installer works inside your user profile and needs no admin rights and no git:
+
+1. downloads [uv](https://github.com/astral-sh/uv) 0.13.7 and checks its SHA-256 against the value written in the script;
+2. installs `creative-forge[ocr]` with `uv tool install` and Python 3.13, which uv downloads if you do not have it. It first tries the release wheel of the installer's version; when no such release exists (HTTP 404) it installs the source archive of the `main` branch (`https://github.com/emirhann-akca/creative-forge/archive/refs/heads/main.zip`), which uv builds locally with the package's own build backend. It prints which source it used. `forge` lands in `~/.local/bin` (Windows: `%USERPROFILE%\.local\bin`), and that folder is added to your PATH for new terminals;
+3. runs `forge setup ffmpeg` and `forge doctor`.
+
+Open a new terminal afterwards. `-ExecutionPolicy Bypass` applies to that one PowerShell process only: Windows clients default to the `Restricted` policy, under which no script runs. To read a script before running it, open the same URL in a browser. `FORGE_SOURCE` (a wheel or a source archive), `FORGE_RELEASE_URL`, `FORGE_ARCHIVE_URL` and `FORGE_PYTHON` override the defaults.
+
+When a release exists (`release.yml` builds and attaches everything from a `v*` tag), the installers attached to it pin that release:
+
+```sh
+curl -LsSf https://github.com/emirhann-akca/creative-forge/releases/latest/download/install.sh | sh
+```
+
+```powershell
 powershell -ExecutionPolicy Bypass -c "irm https://github.com/emirhann-akca/creative-forge/releases/latest/download/install.ps1 | iex"
 ```
 
-Each installer works inside your user profile and needs no admin rights:
+CI runs the two `main` one-liners above, read from this README, on Ubuntu, macOS, Windows PowerShell 5.1 and PowerShell 7 (pointed at the commit under test), plus jobs where the release wheel is missing and the archive fallback has to work.
 
-1. downloads [uv](https://github.com/astral-sh/uv) 0.13.7 and checks its SHA-256 against the value written in the script;
-2. `uv tool install "creative-forge[ocr]"` with Python 3.13, which uv downloads if you do not have it. `forge` lands in `~/.local/bin` (Windows: `%USERPROFILE%\.local\bin`), and that folder is added to your PATH for new terminals;
-3. runs `forge setup ffmpeg` and `forge doctor`.
-
-Open a new terminal afterwards. `-ExecutionPolicy Bypass` applies to that one PowerShell process only: Windows clients default to the `Restricted` policy, under which no script runs. To read a script before running it, open the same URL in a browser.
-
-The one-liners fetch the installers attached to the latest GitHub Release, and each installer installs the wheel of its own version. Until a release has been tagged (`release.yml` builds and attaches everything from a `v*` tag), install from a clone:
+From a clone, for development:
 
 ```sh
 # macOS / Linux
 python3 -m venv .venv && . .venv/bin/activate
-pip install -e ".[dev,ocr]"
+pip install -e ".[dev,ocr,segments,playable]"
 forge setup ffmpeg && forge doctor
 ```
 
 ```powershell
 # Windows PowerShell: no activation needed (Activate.ps1 is blocked by the default policy)
 py -3.13 -m venv .venv
-.venv\Scripts\python -m pip install -e ".[dev,ocr]"
+.venv\Scripts\python -m pip install -e ".[dev,ocr,segments,playable]"
 .venv\Scripts\forge setup ffmpeg
 .venv\Scripts\forge doctor
 ```

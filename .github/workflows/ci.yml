@@ -110,37 +110,61 @@ jobs:
           bash .github/scripts/annotate.sh "pytest ${{ matrix.os }} py${{ matrix.python }}"
           python -X warn_default_encoding -W error::EncodingWarning -m pytest -q -p no:cacheprovider
 
+  # A user's install, end to end: the README's one-liner, read from README.md and run as written except that "main"
+  # becomes this commit, so the branch is tested before it is merged. Without a release the installer would fall back
+  # to the main branch's source archive; FORGE_SOURCE points it at this commit's archive instead, or, in the
+  # "release 404" jobs, FORGE_RELEASE_URL is a wheel that does not exist and FORGE_ARCHIVE_URL is this commit's
+  # archive, so the 404 -> archive path runs for real. One job installs the wheel the build job made.
   user-install:
     needs: build
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-latest, via: "curl | sh" }
-          - { os: macos-latest, via: "curl | sh" }
-          - { os: windows-latest, via: "Windows PowerShell 5.1, irm | iex" }
-          - { os: windows-latest, via: "PowerShell 7, Get-Content | iex" }
-    name: user-install (${{ matrix.os }}, ${{ matrix.via }})
+          - { os: ubuntu-latest, via: "curl | sh", source: archive }
+          - { os: macos-latest, via: "curl | sh", source: archive }
+          - { os: windows-latest, via: "Windows PowerShell 5.1", source: archive }
+          - { os: windows-latest, via: "PowerShell 7", source: archive }
+          - { os: ubuntu-latest, via: "curl | sh", source: "release 404, archive fallback" }
+          - { os: windows-latest, via: "Windows PowerShell 5.1", source: "release 404, archive fallback" }
+          - { os: ubuntu-latest, via: "curl | sh", source: "built wheel" }
+    name: user-install (${{ matrix.os }}, ${{ matrix.via }}, ${{ matrix.source }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     env:
       SCRIPT_REF: ${{ github.event.pull_request.head.sha || github.sha }}
+      SOURCE_MODE: ${{ matrix.source }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: dist
           path: dist
-      - name: Install like a user (curl | sh)
+      - name: Point the installer at this commit (${{ matrix.source }})
+        shell: bash
+        run: |
+          archive="https://github.com/${GITHUB_REPOSITORY}/archive/${SCRIPT_REF}.zip"
+          case "$SOURCE_MODE" in
+            archive) echo "FORGE_SOURCE=$archive" >> "$GITHUB_ENV" ;;
+            "built wheel") echo "FORGE_SOURCE=$(ls "$PWD"/dist/*.whl)" >> "$GITHUB_ENV" ;;
+            *)
+              echo "FORGE_RELEASE_URL=https://github.com/${GITHUB_REPOSITORY}/releases/download/v0.0.0-ci-missing/creative_forge-0.0.0-py3-none-any.whl" >> "$GITHUB_ENV"
+              echo "FORGE_ARCHIVE_URL=$archive" >> "$GITHUB_ENV"
+              ;;
+          esac
+      - name: README one-liner (curl | sh)
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          whl="$(ls "$PWD"/dist/*.whl)"
-          url="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${SCRIPT_REF}/install.sh"
-          bash .github/scripts/annotate.sh "install.sh" bash -c "set -o pipefail; curl -LsSf '$url' | FORGE_SOURCE='$whl' sh"
+          line=$(grep -m1 -E '^curl -LsSf https://raw\.githubusercontent\.com/[^ ]+/main/install\.sh \| sh$' README.md) || {
+            echo "::error title=README::no 'curl ... /main/install.sh | sh' one-liner found in README.md"; exit 1; }
+          cmd=${line/\/main\/install.sh/\/$SCRIPT_REF\/install.sh}
+          echo "README: $line"
+          echo "run:    $cmd"
+          bash .github/scripts/annotate.sh "README one-liner (sh)" bash -c "set -o pipefail; $cmd" | tee "$RUNNER_TEMP/install.log"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-      - name: Install like a user (Windows PowerShell 5.1, irm | iex)
-        if: matrix.via == 'Windows PowerShell 5.1, irm | iex'
+      - name: README one-liner (Windows PowerShell 5.1)
+        if: matrix.via == 'Windows PowerShell 5.1'
         shell: powershell
         run: |
           $ErrorActionPreference = 'Continue'
@@ -149,18 +173,42 @@ jobs:
           [System.Management.Automation.Language.Parser]::ParseFile("$PWD\install.ps1", [ref]$null, [ref]$errors) | Out-Null
           foreach ($e in $errors) { Write-Output "::error file=install.ps1,line=$($e.Extent.StartLineNumber),title=install.ps1 (5.1 parser)::$($e.Message)" }
           if ($errors) { exit 1 }
-          $env:FORGE_SOURCE = (Get-ChildItem dist\*.whl).FullName
-          $url = "https://raw.githubusercontent.com/$env:GITHUB_REPOSITORY/$env:SCRIPT_REF/install.ps1"
-          Invoke-Step 'install.ps1 (5.1)' { powershell -NoProfile -ExecutionPolicy Bypass -Command "irm $url | iex" }
+          $pattern = '^powershell -ExecutionPolicy Bypass -c "irm https://raw\.githubusercontent\.com/\S+/main/install\.ps1 \| iex"$'
+          $line = (Select-String -LiteralPath README.md -Pattern $pattern -CaseSensitive | Select-Object -First 1).Line
+          if (-not $line) { Write-Output "::error title=README::no 'powershell ... irm .../main/install.ps1 | iex' one-liner in README.md"; exit 1 }
+          $cmd = $line.Replace('/main/install.ps1', "/$env:SCRIPT_REF/install.ps1")
+          Write-Output "README: $line"
+          Write-Output "run:    $cmd"
+          Invoke-Step 'README one-liner (Windows PowerShell 5.1)' { Invoke-Expression $cmd }
+          Copy-Item -LiteralPath $global:LastStepLog -Destination "$env:RUNNER_TEMP\install.log"
           Add-Content -Path $env:GITHUB_PATH -Value "$env:USERPROFILE\.local\bin" -Encoding Ascii
-      - name: Install like a user (PowerShell 7)
-        if: matrix.via == 'PowerShell 7, Get-Content | iex'
+      - name: README one-liner (PowerShell 7, pwsh in place of powershell)
+        if: matrix.via == 'PowerShell 7'
         shell: pwsh
         run: |
           . ./.github/scripts/Invoke-Step.ps1
-          $env:FORGE_SOURCE = (Get-ChildItem dist/*.whl).FullName
-          Invoke-Step 'install.ps1 (7)' { pwsh -NoProfile -ExecutionPolicy Bypass -Command "Get-Content -Raw ./install.ps1 | Invoke-Expression" }
+          $pattern = '^powershell -ExecutionPolicy Bypass -c "irm https://raw\.githubusercontent\.com/\S+/main/install\.ps1 \| iex"$'
+          $line = (Select-String -LiteralPath README.md -Pattern $pattern -CaseSensitive | Select-Object -First 1).Line
+          if (-not $line) { Write-Output "::error title=README::no 'powershell ... irm .../main/install.ps1 | iex' one-liner in README.md"; exit 1 }
+          $cmd = 'pwsh' + $line.Substring('powershell'.Length).Replace('/main/install.ps1', "/$env:SCRIPT_REF/install.ps1")
+          Write-Output "README: $line"
+          Write-Output "run:    $cmd"
+          Invoke-Step 'README one-liner (PowerShell 7)' { Invoke-Expression $cmd }
+          Copy-Item -LiteralPath $global:LastStepLog -Destination "$env:RUNNER_TEMP/install.log"
           Add-Content -Path $env:GITHUB_PATH -Value "$env:USERPROFILE\.local\bin"
+      - name: The installer said which source it used
+        shell: pwsh
+        run: |
+          $log = Get-Content -Raw -LiteralPath (Join-Path $env:RUNNER_TEMP 'install.log')
+          if ($env:SOURCE_MODE -eq 'release 404, archive fallback') {
+            $archive = 'source: main branch source archive \(https://github\.com/\S+/archive/' + $env:SCRIPT_REF + '\.zip\)'
+            if ($log -notmatch 'no release wheel for v\S+ \(HTTP 404' -or $log -notmatch $archive) {
+              Write-Output "::error title=archive fallback::the installer did not report the 404 and the archive fallback"; exit 1
+            }
+            Write-Output "::notice title=archive fallback ${{ matrix.os }}::release wheel 404, installed from archive/$env:SCRIPT_REF.zip"
+          } elseif ($log -notmatch 'source: FORGE_SOURCE=') {
+            Write-Output "::error title=installer source::no 'source: FORGE_SOURCE=' line in the install log"; exit 1
+          }
       - name: The installed forge uses the ffmpeg it downloaded, and RapidOCR or Vision
         shell: pwsh
         run: |

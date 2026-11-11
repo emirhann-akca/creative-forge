@@ -1,14 +1,18 @@
-# creative-forge installer for Windows 10/11 x64 (Windows PowerShell 5.1 or PowerShell 7). No admin rights.
+# creative-forge installer for Windows 10/11 x64 (Windows PowerShell 5.1 or PowerShell 7). No admin rights, no git.
 #
-#   powershell -ExecutionPolicy Bypass -c "irm https://github.com/emirhann-akca/creative-forge/releases/latest/download/install.ps1 | iex"
+#   powershell -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/emirhann-akca/creative-forge/main/install.ps1 | iex"
 #
 # What it does, all inside your user profile:
 #   1. downloads uv (pinned version, SHA-256 checked against the value in this file) into %LOCALAPPDATA%\creative-forge;
-#   2. `uv tool install creative-forge[ocr]` (uv downloads Python if needed) -> forge.exe in %USERPROFILE%\.local\bin;
+#   2. installs creative-forge[ocr] with `uv tool install` (uv downloads Python if needed) -> forge.exe in
+#      %USERPROFILE%\.local\bin. Source: the release wheel of this installer's version; if that release does not
+#      exist (HTTP 404), the source archive of the main branch, which uv builds locally. It prints which one it used;
 #   3. `forge setup ffmpeg` (pinned ffmpeg 9.0.2, SHA-256 checked) and `forge doctor`.
 #
 # Settings (environment variables):
-#   FORGE_SOURCE          what to install instead of the release wheel: a wheel path or URL, or a git+https URL
+#   FORGE_SOURCE          install this instead: a wheel path or URL, a source archive URL (.zip / .tar.gz)
+#   FORGE_RELEASE_URL     the release wheel to try first (default: this version's wheel on GitHub Releases)
+#   FORGE_ARCHIVE_URL     the source archive used when the release wheel is missing (default: the main branch)
 #   FORGE_PYTHON          Python version for the tool environment (default 3.13)
 #   FORGE_NO_MODIFY_PATH  1 = do not add the tool folder to your user PATH
 #
@@ -23,8 +27,12 @@
     $UvSha256 = '0cdc5b38fe5a8168ed6a25814f5ba43c21d313dd3187314fccb37b7cec46e021'  # uv-x86_64-pc-windows-msvc.zip
     $Repo = 'emirhann-akca/creative-forge'
     $Python = if ($env:FORGE_PYTHON) { $env:FORGE_PYTHON } else { '3.13' }
-    $Source = if ($env:FORGE_SOURCE) { $env:FORGE_SOURCE } else {
-        "https://github.com/$Repo/releases/download/v$ForgeVersion/creative_forge-$ForgeVersion-py3-none-any.whl"
+    $Wheel = "creative_forge-$ForgeVersion-py3-none-any.whl"
+    $ReleaseUrl = if ($env:FORGE_RELEASE_URL) { $env:FORGE_RELEASE_URL } else {
+        "https://github.com/$Repo/releases/download/v$ForgeVersion/$Wheel"
+    }
+    $ArchiveUrl = if ($env:FORGE_ARCHIVE_URL) { $env:FORGE_ARCHIVE_URL } else {
+        "https://github.com/$Repo/archive/refs/heads/main.zip"
     }
 
     function Say([string]$Message) { Write-Host "forge-install: $Message" }
@@ -88,11 +96,42 @@
         }
     }
 
+    $wheelDir = $null
+    if ($env:FORGE_SOURCE) {
+        $Source = $env:FORGE_SOURCE
+        Say "source: FORGE_SOURCE=$Source"
+    } else {
+        $wheelDir = Join-Path ([IO.Path]::GetTempPath()) ("forge-wheel-" + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $wheelDir | Out-Null
+        $status = 0
+        try {
+            Invoke-WebRequest -Uri $ReleaseUrl -OutFile (Join-Path $wheelDir $Wheel) -UseBasicParsing
+            $status = 200
+        } catch {
+            $response = $_.Exception.Response
+            if ($response) { $status = [int]$response.StatusCode }
+            if ($status -ne 404) { throw "forge-install: could not download $ReleaseUrl ($($_.Exception.Message))" }
+        }
+        if ($status -eq 200) {
+            $Source = Join-Path $wheelDir $Wheel
+            Say "source: release wheel v$ForgeVersion ($ReleaseUrl)"
+        } else {
+            $Source = $ArchiveUrl
+            Say "no release wheel for v$ForgeVersion (HTTP 404 at $ReleaseUrl)"
+            Say "source: main branch source archive ($Source); uv builds it, no git needed"
+        }
+    }
     if (Test-Path -LiteralPath $Source) {
         $Source = ([Uri](Resolve-Path -LiteralPath $Source).ProviderPath).AbsoluteUri  # file:///C:/... (percent-encoded)
     }
-    Say "installing creative-forge from $Source (Python $Python; uv downloads it if missing)"
-    Invoke-Native $uv @('tool', 'install', '--force', '--compile-bytecode', '--python', $Python, "creative-forge[ocr] @ $Source")
+    Say "installing creative-forge (Python $Python; uv downloads it if missing)"
+    # --refresh-package: a branch archive keeps its URL while its contents change
+    try {
+        Invoke-Native $uv @('tool', 'install', '--force', '--refresh-package', 'creative-forge', '--compile-bytecode',
+            '--python', $Python, "creative-forge[ocr] @ $Source")
+    } finally {
+        if ($wheelDir) { Remove-Item -LiteralPath $wheelDir -Recurse -Force -ErrorAction SilentlyContinue }
+    }
 
     $bin = (& $uv tool dir --bin | Select-Object -First 1).Trim()
     if ($env:FORGE_NO_MODIFY_PATH -ne '1' -and $env:UV_NO_MODIFY_PATH -ne '1') {

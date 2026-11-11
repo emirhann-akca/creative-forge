@@ -45,6 +45,9 @@ dependencies = [
 ocr = ["rapidocr>=3.10,<4", "onnxruntime>=1.20"]
 # PySceneDetect (BSD-3-Clause) for `forge segments`: scene cuts in a gameplay capture, CPU only.
 segments = ["scenedetect>=0.6.4,<0.8"]
+# Playwright (Apache-2.0) for the dynamic run of `forge playable check`; it drives an installed Chrome
+# (--browser-channel chrome) or a Chromium from `playwright install chromium`.
+playable = ["playwright>=1.48"]
 # httpx2 (or httpx with older Starlette) is what FastAPI's TestClient runs on; the annotate plugin turns failing tests
 # into GitHub check annotations, readable without signing in.
 dev = ["pytest>=8.0", "ruff>=0.5", "httpx>=0.27", "httpx2>=2.0", "pytest-github-actions-annotate-failures>=0.4"]
