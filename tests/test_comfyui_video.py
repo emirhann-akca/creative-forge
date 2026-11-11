@@ -158,11 +158,12 @@ def serve(worker: Worker):
             if not self._auth():
                 return
             if path == "/upload/image":
-                m = re.search(rb'filename="([^"]+)"\r\nContent-Type: image/png\r\n\r\n(.*?)\r\n--', body, re.S)
-                assert m, body[:200]
-                name = m.group(1).decode()
+                boundary = self.headers["Content-Type"].split("boundary=", 1)[1].encode()
+                part = next(x for x in body.split(b"--" + boundary) if b'name="image"' in x)
+                head, _, data = part.partition(b"\r\n\r\n")
+                name = re.search(rb'filename="([^"]+)"', head).group(1).decode()  # type: ignore[union-attr]
                 p = worker.tmp / name
-                p.write_bytes(m.group(2))
+                p.write_bytes(data[:-2])  # the part ends with CRLF before the next boundary
                 worker.uploads[name] = p
                 return self._send(200, {"name": name, "subfolder": "", "type": "temp"})
             if path == "/prompt":
