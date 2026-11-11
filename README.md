@@ -12,6 +12,7 @@ forge demo                                  # whole pipeline offline: fake provi
 forge ui                                    # local web page: runs, QA reports, players, approve / reject
 forge ideate --game "..." --clips a.mp4     # draft concepts with a tool-calling LLM + lesson retrieval
 forge plan   examples/ads.yaml              # cost estimate, spec lint and model licences, no calls
+forge segments capture.mp4                  # suggest gameplay segment in/out points (PySceneDetect)
 forge run    examples/ads.yaml --budget-usd 15
 forge review out/puzzle-ads                 # approve / reject each export, with a note
 forge publish out/puzzle-ads --to deliver/  # only approved files; refuses on failed QA unless overridden
@@ -240,6 +241,32 @@ concepts:
 ```
 
 Each export's `.forge.json` sidecar holds `creative_id`, `ad_name`, the seven `ids`, the `tags` and the `models` that made it with their licences; `report.json` carries the ID, name and tags, and `forge publish` copies all of it into `manifest.json`. `forge ideate` drafts fill `hook_type` and `emotion` from the taxonomy's values and leave `mechanic_shown` to a person.
+
+## Variant matrix: many exports, few paid generations
+
+```yaml
+concepts:
+  - id: dust-blower
+    gameplay: {path: footage/level_71.mp4, in_s: 7.6, out_s: 10.6}   # the landing segment: every hook lands here
+    hook: {image_prompt: "...", video_prompt: "...", cut_s: 5.45}
+    end_card: {headline: {en: "Fill every order!", tr: "Her siparişi yetiştir!"}, button: {en: PLAY NOW, tr: OYNA}}
+    variants:
+      hooks:                                    # merged over `hook`; each may carry its own tags
+        - {id: blower}
+        - {id: washer, video_prompt: "...", tags: {hook_type: real-hand}}
+        - {id: oops, image_prompt: "...", tags: {hook_type: fail-state}}
+      segments:                                 # more real gameplay after the landing segment (hard cut)
+        - {id: lvl7, in_s: 12, out_s: 20}       # merged over `gameplay`: same path and crop
+        - {id: lvl21, path: footage/level_21.mp4, in_s: 3, out_s: 11}
+      end_cards: [{id: fill}, {id: try, headline: {en: "Try it yourself!", tr: "Kendin dene!"}}]
+      languages: [en, tr]
+```
+
+Every hook lands on the first frame of the concept's `gameplay` (the landing segment), so a hook's image edit and video generation do not depend on what follows: one generation serves every segment, end card, language and format, inside a run (a per-key memo) and across runs (the content-hash cache). Segments are joined to the landing segment with a hard cut; the AI-to-real seam stays where it was measured. Each (hook, segment, end card, language) is one render, assembled, mixed, mastered and checked on its own, then exported in every format, and each export gets its own creative ID and ad name. Music is one track per concept, generated for its longest render.
+
+`forge plan` counts both sides: 3 hooks × 4 segments × 2 end cards × 2 formats is `48 export(s) from 24 render(s); … 3 hook video(s)` at the price of three Veo clips. A test runs a 2 × 2 × 2 matrix with fake providers and checks that each hook was generated once and that adding a third language generated nothing new. Hook, segment and end-card ids are lowercase `a-z0-9-`; a typo in a variant fails at load, lint runs on every hook (`c1/oops: [tail-drift] …`), and a localized text missing a language is an error.
+
+**`forge segments capture.mp4`** suggests segments from a gameplay recording with [PySceneDetect](https://github.com/Breakthrough/PySceneDetect) (BSD-3-Clause; `pip install "creative-forge[segments]"`): it finds the hard cuts (`--detector content` or `adaptive`), trims `--margin` (0.2 s) at both ends of every scene, keeps scenes of at least `--min-len` seconds (capped at `--max-len`) and prints a `variants.segments` block to paste into a spec (`--json` for the raw cut list). On a synthetic capture with cuts at frames 60, 105 and 165, both detectors find all three within one frame.
 
 ## Performance import
 

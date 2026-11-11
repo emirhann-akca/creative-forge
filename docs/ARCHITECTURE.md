@@ -19,7 +19,8 @@
 | `naming.py` | `CreativeIds`: the seven names of one export, its deterministic `creative_id` (SHA-256 prefix) and the `cf1.` ad name; `parse()` checks the ID, `find()` locates a name inside a longer string. |
 | `tags.py`, `data/tag_taxonomy.yaml` | The tag vocabulary, lint of hand-set tags, and the derived tags (`format`, `length_bucket`, `ai_generated`) added per export. |
 | `licenses.py`, `data/model_licenses.yaml` | Licence registry (code and weights licence, commercial status, conditions, source, date checked) and the guard: `models_in_use(spec)` lists every model a real run would call, `check()` gives each a verdict against `targets:` (`refuse`, `warn`, `ok`, `service`), and `--license-override MODEL=REASON` turns one refusal into an `overridden` entry that the ledger records. `Pipeline.run()` checks again before any generation, so library callers get the same guard as the CLI. |
-| `pipeline.py` | One job per concept in a private temp dir, a thread pool across concepts, then the blind judge. |
+| `pipeline.py` | One job per render (concept × hook × segment × end card × language) in a private temp dir, a thread pool across all renders, then the blind judge. Per-concept assets (landing segment, each hook, each joined segment, the music) are computed once through a thread-safe `Memo` that also remembers failures. |
+| `segments.py` | `forge segments`: PySceneDetect scene list, trimmed suggestions, a `variants.segments` YAML block. |
 | `report.py` | Self-contained HTML (inline CSS, base64 contact sheets) and a JSON twin. |
 | `review.py` | Human decisions per export (`review.json`, keyed to file SHA-256) and the publish gate with its manifest. |
 | `ffmpeg.py` | The one place that decides which ffmpeg/ffprobe run (`CREATIVE_FORGE_FFMPEG_DIR`, the managed build, `PATH`), probes a build's features, picks the best AAC encoder that actually opens (`aac_at`, `aac_mf`, `aac`), and decodes every tool output as UTF-8. |
@@ -29,6 +30,10 @@
 | `ui/` | `forge ui`: FastAPI + Jinja2 + vendored htmx. Runs list, report, range-request players, approve/reject through `review.decide`, background demo, doctor. Loopback `Host` check and a per-process token on every POST. |
 | `perf/` | `store.py`: SQLite (`perf_rows`, `creatives`, `imports`) with upserts on (network, account, level, date, date_end, ad, country). `http.py`: GET with retries, `Retry-After`, a `Redactor` and transport errors re-raised without their URL. `meta.py`, `applovin.py`, `csvimport.py`: the importers. `stats.py`: Wilson intervals, Beta-posterior P(better), and the verdict rule. `report.py`: aggregation per network, creative and tag value, the text summary and HTML (also rendered by `forge ui` at `/perf`). `lessons.py`: tag verdicts written as library entries that `ideate.library.load_library()` appends as `perf_lesson`. `commands.py`: `forge perf`. |
 | `ideate/` | `library.py`: lesson library, hashing or Vertex embedder, JSON vector index. `tools.py`: function declarations and their local implementations. `agent.py`: the function-calling loop, the Vertex chat model and the scripted one. |
+
+## Variant matrix
+
+`Concept.variants` lists hook, segment and end-card overrides and languages; `Concept._expand` merges each override over the base (`hook`, `gameplay`, `end_card`) and validates it as the base model, so a typo fails at load. `AdSpec.matrix(c)` is the ordered product. A hook depends only on the landing segment's real frame, so the `Memo` key for a hook is `(concept, hook)`, and the generator's cache key is unchanged by segment, end card, language or format. A segment is `join_gameplay(landing, extra)`: the extra clip after a hard cut, with silence where a part has no audio; the real frame stays the landing frame. `estimate()` writes one image/video line per hook, one music line per concept and one judge line per concept covering all its renders, and reports exports vs renders.
 
 ## One concept, step by step
 

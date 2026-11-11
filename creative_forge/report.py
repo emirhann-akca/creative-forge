@@ -57,7 +57,7 @@ def _img(path: Path | None) -> str:
 
 def _concept(cr: ConceptResult) -> str:
     parts = [
-        f'<div class="card"><h3>{html.escape(cr.concept)} {_badge(cr.status)} '
+        f'<div class="card"><h3>{html.escape(cr.label)} {_badge(cr.status)} '
         f'<span class="muted">{cr.seconds:.0f} s</span></h3>'
     ]
     if cr.error:
@@ -107,6 +107,7 @@ def report_dict(rr: RunResult) -> dict[str, Any]:
         "concepts": [
             {
                 "concept": c.concept,
+                "variant": c.variant,
                 "status": c.status.value,
                 "error": c.error,
                 "timeline": c.timeline,
@@ -146,11 +147,12 @@ def write_report(rr: RunResult, out_dir: Path | None = None) -> tuple[Path, Path
         f"<li><b>{html.escape(i.concept)}</b> [{html.escape(i.rule)}] {html.escape(i.message)}</li>" for i in rr.lint
     )
     n_exports = sum(len(c.exports) for c in rr.concepts)
+    n_concepts = len({c.concept for c in rr.concepts})
     body = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Forge QA Report</title><style>{CSS}</style></head>
 <body><main><h1>{html.escape(rr.name)} {_badge(rr.status)}</h1>
-<p class="muted">{len(rr.concepts)} concept(s), {n_exports} export(s), {rr.seconds:.0f} s.
+<p class="muted">{n_concepts} concept(s), {len(rr.concepts)} render(s), {n_exports} export(s), {rr.seconds:.0f} s.
 Spent ${led.spent:.2f}; cache saved ${led.saved_by_cache:.2f}. Upper-bound plan ${rr.plan.total_priced:.2f}
 (prices as of {rr.plan.pricing.as_of if rr.plan.pricing else "?"}).</p>
 <h2>Concepts</h2>{"".join(_concept(c) for c in rr.concepts)}

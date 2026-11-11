@@ -8,7 +8,7 @@ from pathlib import Path
 
 import yaml
 
-from creative_forge.spec import AdSpec
+from creative_forge.spec import AdSpec, HookSpec
 
 
 @dataclass(frozen=True)
@@ -67,10 +67,15 @@ class PlanLine:
 class Plan:
     lines: list[PlanLine] = field(default_factory=list)
     pricing: Pricing | None = None
+    renders: int = 0  # (concept, hook, segment, end card, language) combinations
+    exports: int = 0  # renders x formats
 
     @property
     def total_priced(self) -> float:
         return round(sum(line.usd for line in self.lines if line.usd is not None), 4)
+
+    def count(self, kind: str) -> int:
+        return sum(1 for line in self.lines if line.kind == kind)
 
     @property
     def unpriced(self) -> list[PlanLine]:
@@ -87,32 +92,46 @@ class Plan:
         if self.unpriced:
             total += f" + {len(self.unpriced)} unpriced call(s)"
         out.append(total)
+        if self.exports:
+            out.append(
+                f"{self.exports} export(s) from {self.renders} render(s); paid generations, each at most once (cache): "
+                f"{self.count('hook video')} hook video(s), {self.count('hook image')} image edit(s), "
+                f"{self.count('music')} music track(s), {self.count('judge')} judge line(s)"
+            )
         if self.pricing:
             out.append(f"prices as of {self.pricing.as_of}; verify on Google Cloud's pricing page")
         return "\n".join(out)
 
 
 def estimate(spec: AdSpec, pricing: Pricing, judge_runs: int | None = None) -> Plan:
-    """Upper-bound cost of a run: every generation is assumed to miss the cache."""
+    """Upper-bound cost of a run: every generation is assumed to miss the cache within the run's own reuse.
+
+    A variant matrix pays per *hook*, not per export: every hook lands on the concept's landing frame, so one hook
+    generation serves every segment, end card, language and format it is combined with (the cache key does not
+    change). Music is one track per concept. The judge watches one export per render (the 9:16 master)."""
     plan = Plan(pricing=pricing)
     runs = spec.qa.judge_runs if judge_runs is None else judge_runs
     for c in spec.concepts:
-        h = c.hook
-        if h.image_prompt and spec.image_provider == "comfyui":
-            plan.lines.append(PlanLine(c.id, "hook image", spec.image_edit_model, "1 local SDXL edit", 0.0))
-        elif h.image_prompt:
-            plan.lines.append(PlanLine(c.id, "hook image", spec.models.image_edit, "1 image edit", pricing.image(1)))
-        plan.lines.append(
-            PlanLine(
-                c.id,
-                "hook video",
-                spec.models.video,
-                f"{h.samples} x {h.duration_s}s {'with' if h.audio else 'no'} audio",
-                pricing.video(h.duration_s, h.samples, h.audio),
-            )
-        )
+        hooks = c.hook_variants()
+        for hid, h in hooks:
+            who = c.id if len(hooks) == 1 and hid == "main" else f"{c.id}/{hid}"
+            if h.image_prompt and spec.image_provider == "comfyui":
+                plan.lines.append(PlanLine(who, "hook image", spec.image_edit_model, "1 local SDXL edit", 0.0))
+            elif h.image_prompt:
+                plan.lines.append(PlanLine(who, "hook image", spec.models.image_edit, "1 image edit", pricing.image(1)))
+            plan.lines.append(_video_line(spec, pricing, who, h))
         if c.music and c.music.prompt:
             plan.lines.append(PlanLine(c.id, "music", spec.models.music, "1 track", pricing.music(1)))
+        renders = len(spec.matrix(c))
+        plan.renders += renders
+        plan.exports += renders * len(c.formats)
         if runs:  # the judge watches the 9:16 master only; 4:5 is derived from it
-            plan.lines.append(PlanLine(c.id, "judge", spec.models.judge, f"{runs} blind run(s)", pricing.judge(runs)))
+            detail = f"{runs} blind run(s)" + (f" x {renders} renders" if renders > 1 else "")
+            price = pricing.judge(runs * renders)
+            plan.lines.append(PlanLine(c.id, "judge", spec.models.judge, detail, price))
     return plan
+
+
+def _video_line(spec: AdSpec, pricing: Pricing, who: str, h: HookSpec) -> PlanLine:
+    detail = f"{h.samples} x {h.duration_s}s {'with' if h.audio else 'no'} audio"
+    return PlanLine(who, "hook video", spec.models.video, detail, pricing.video(h.duration_s, h.samples, h.audio))

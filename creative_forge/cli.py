@@ -113,7 +113,8 @@ def cmd_run(a: argparse.Namespace) -> int:
         for c in spec.concepts:
             for label, p in (
                 [("gameplay", spec.resolve(c.gameplay.path))]
-                + [("reference", spec.resolve(r)) for r in c.hook.reference_images]
+                + [(f"segment {sid}", spec.resolve(seg.path)) for sid, seg in c.segment_variants() if seg is not None]
+                + [(f"reference ({hid})", spec.resolve(r)) for hid, h in c.hook_variants() for r in h.reference_images]
                 + ([("music", spec.resolve(c.music.path))] if c.music and c.music.path else [])
             ):
                 if p is not None and not p.exists():
@@ -176,9 +177,9 @@ def cmd_run(a: argparse.Namespace) -> int:
     html_path, _ = write_report(rr)
     for c in rr.concepts:
         if c.error:
-            print(f"\n{c.concept}: FAILED {c.error}")
+            print(f"\n{c.label}: FAILED {c.error}")
         for e in c.exports:
-            _print_checks(f"{c.concept} {e.format}  {e.path}", e.checks)
+            _print_checks(f"{c.label} {e.format}  {e.path}", e.checks)
     print(f"\nspent ${rr.ledger.spent:.2f} (cache saved ${rr.ledger.saved_by_cache:.2f})")
     print(f"report: {html_path}")
     return 1 if rr.status is Status.FAIL else 0
@@ -245,9 +246,9 @@ def cmd_demo(a: argparse.Namespace) -> int:
     html_path, json_path = write_report(rr)
     for c in rr.concepts:
         if c.error:
-            print(f"\n{c.concept}: FAILED {c.error}")
+            print(f"\n{c.label}: FAILED {c.error}")
         for e in c.exports:
-            _print_checks(f"{c.concept} {e.format}  {e.path.name}", e.checks)
+            _print_checks(f"{c.label} {e.format}  {e.path.name}", e.checks)
     print(
         f"\nsimulated list price of this run on Vertex AI: "
         f"${sum((e.list_usd or 0) for e in rr.ledger.entries if not e.cached):.2f} (charged $0, fake providers)"
@@ -335,6 +336,35 @@ def cmd_ideate(a: argparse.Namespace) -> int:
     ]
     out = write_spec(result, Path(a.out), a.name, header)
     print(f"spec: {out}  ({len(result.concepts)} concept(s); `forge plan {out}` for the cost)")
+    return 0
+
+
+def cmd_segments(a: argparse.Namespace) -> int:
+    from creative_forge.segments import SegmentsUnavailable, as_yaml, detect_scenes, suggest, to_dict
+
+    video = Path(a.video)
+    if not video.is_file():
+        print(f"error: {video} not found", file=sys.stderr)
+        return 2
+    try:
+        scenes, fps = detect_scenes(video, detector=a.detector, threshold=a.threshold)
+    except SegmentsUnavailable as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    picks = suggest(scenes, min_len_s=a.min_len, max_len_s=a.max_len, margin_s=a.margin)
+    if a.json:
+        print(json.dumps(to_dict(video, fps, scenes, picks), indent=2))
+        return 0
+    print(
+        f"{video.name}: {len(scenes)} scene(s) at {fps:g} fps; cuts at "
+        + ", ".join(f"{s.start_s:.2f}s" for s in scenes[1:])
+    )
+    for i, sc in enumerate(scenes):
+        print(
+            f"  scene {i}: {sc.start_s:7.2f} - {sc.end_s:7.2f} s  ({sc.duration:.2f} s, "
+            f"frames {sc.start_frame}-{sc.end_frame})"
+        )
+    print("\n" + as_yaml(video, picks))
     return 0
 
 
@@ -465,6 +495,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--comfyui", metavar="URL", help="also check a ComfyUI server (default: $CREATIVE_FORGE_COMFYUI_URL)"
     )
     sdoc.set_defaults(fn=cmd_doctor)
+
+    sg = sub.add_parser("segments", help="suggest gameplay segment in/out points from a capture (PySceneDetect)")
+    sg.add_argument("video")
+    sg.add_argument("--detector", choices=["content", "adaptive"], default="content")
+    sg.add_argument("--threshold", type=float, default=None, help="detector threshold (content 27, adaptive 3)")
+    sg.add_argument("--min-len", type=float, default=3.0, help="shortest suggested segment (s)")
+    sg.add_argument("--max-len", type=float, default=10.0, help="longest suggested segment (s)")
+    sg.add_argument("--margin", type=float, default=0.2, help="trimmed at both ends of a scene (s)")
+    sg.add_argument("--json", action="store_true")
+    sg.set_defaults(fn=cmd_segments)
 
     from creative_forge.perf.commands import add_parser as add_perf
 

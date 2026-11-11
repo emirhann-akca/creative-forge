@@ -55,7 +55,8 @@ jobs:
           names = set(zipfile.ZipFile(glob.glob("dist/*.whl")[0]).namelist())
           need = ["creative_forge/ui/static/htmx.min.js", "creative_forge/ui/static/htmx.LICENSE.txt",
                   "creative_forge/ui/templates/run.html", "creative_forge/qa/ocr_vision.swift",
-                  "creative_forge/data/pricing.yaml"]
+                  "creative_forge/data/pricing.yaml", "creative_forge/data/model_licenses.yaml",
+                  "creative_forge/data/tag_taxonomy.yaml", "creative_forge/ui/templates/perf.html"]
           missing = [n for n in need if n not in names]
           if missing:
               print(f"::error title=wheel contents::missing {missing}")
@@ -80,6 +81,7 @@ jobs:
         shell: bash
     env:
       CREATIVE_FORGE_REQUIRE_OCR: rapidocr # the RapidOCR tests fail instead of skipping if the backend is missing
+      CREATIVE_FORGE_REQUIRE_EXTRAS: "1" # so do the tests of the optional extras (segments, playable)
       CREATIVE_FORGE_HOME: ${{ github.workspace }}/.forge-home
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -90,10 +92,10 @@ jobs:
         with:
           path: .forge-home/data/ffmpeg
           key: ffmpeg-${{ runner.os }}-${{ hashFiles('creative_forge/setup_ffmpeg.py') }}
-      - name: Install (Python ${{ matrix.python }}, editable, with the ocr extra)
+      - name: Install (Python ${{ matrix.python }}, editable, with the ocr and segments extras)
         run: |
           uv venv --python "${{ matrix.python }}" .venv
-          uv pip install -e ".[dev,ocr]"
+          uv pip install -e ".[dev,ocr,segments]"
           if [ "$RUNNER_OS" = "Windows" ]; then
             echo "$GITHUB_WORKSPACE\\.venv\\Scripts" >> "$GITHUB_PATH"
           else

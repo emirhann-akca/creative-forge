@@ -9,7 +9,7 @@ from PIL import Image, ImageDraw, ImageFilter
 
 from creative_forge.ffmpeg import extract_frame, last_frame, pipe_writer, probe, run
 from creative_forge.imaging import disclaimer_overlay, end_card_frames
-from creative_forge.spec import EndCardSpec, GameplaySpec, HookSpec, RenderSpec
+from creative_forge.spec import EndCardSpec, GameplaySpec, HookSpec, RenderSpec, localized
 
 MCI = "minterpolate=fps={fps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1"
 
@@ -183,7 +183,63 @@ def prepare_hook(veo: Path, real_frame: Path, h: HookSpec, r: RenderSpec, work: 
     return HookClip(out, audio, float(probe(out).video_duration or cut))
 
 
-def render_end_card(gameplay: Path, e: EndCardSpec, r: RenderSpec, work: Path, resolve) -> Path:
+def join_gameplay(landing: GameplayClip, extra: GameplayClip, r: RenderSpec, work: Path) -> GameplayClip:
+    """Landing segment, then another segment with a hard cut (a variant's ``segments`` entry). The real frame stays
+    the landing segment's: that is where the hook lands. A part without audio contributes silence."""
+    work.mkdir(parents=True, exist_ok=True)
+    out = work / "gameplay.mp4"
+    norm = f"fps={r.fps},format=yuv420p,setsar=1"
+    run(
+        [
+            "-i",
+            str(landing.video),
+            "-i",
+            str(extra.video),
+            "-filter_complex",
+            f"[0:v]{norm}[a];[1:v]{norm}[b];[a][b]concat=n=2:v=1:a=0[v]",
+            "-map",
+            "[v]",
+            "-an",
+            "-c:v",
+            "libx264",
+            "-crf",
+            str(r.intermediate_crf),
+            "-preset",
+            r.preset,
+            str(out),
+        ]
+    )
+    duration = float(probe(out).video_duration or landing.duration + extra.duration)
+    audio = None
+    if landing.audio or extra.audio:
+        audio = work / "gameplay.wav"
+        inputs: list[str] = []
+        for part in (landing, extra):
+            if part.audio:
+                inputs += ["-i", str(part.audio)]
+            else:
+                inputs += ["-f", "lavfi", "-t", f"{part.duration:.3f}", "-i", "anullsrc=r=48000:cl=stereo"]
+        fmt = "aformat=sample_rates=48000:channel_layouts=stereo"
+        run(
+            [
+                *inputs,
+                "-filter_complex",
+                f"[0:a]{fmt},apad=whole_dur={landing.duration:.3f}[a];[1:a]{fmt}[b];[a][b]concat=n=2:v=0:a=1[o]",
+                "-map",
+                "[o]",
+                "-t",
+                f"{duration:.3f}",
+                "-c:a",
+                "pcm_s16le",
+                str(audio),
+            ]
+        )
+    return GameplayClip(out, audio, landing.real_frame, duration)
+
+
+def render_end_card(
+    gameplay: Path, e: EndCardSpec, r: RenderSpec, work: Path, resolve, lang: str | None = None
+) -> Path:
     if e.image is not None:
         bg, blur = Image.open(resolve(e.image)), False
     else:
@@ -197,8 +253,8 @@ def render_end_card(gameplay: Path, e: EndCardSpec, r: RenderSpec, work: Path, r
         r.height,
         r.fps,
         e.duration_s,
-        e.headline,
-        e.button,
+        localized(e.headline, lang or ""),
+        localized(e.button, lang or ""),
         logo=resolve(e.logo),
         fnt=resolve(e.font),
         blur=blur,

@@ -157,3 +157,13 @@ def mix_source(media: Path) -> tuple[Path, float, float, float]:
     expr = f"if(lt(t,4),{hook},{game})"
     run(["-f", "lavfi", "-i", f"aevalsrc='{expr}|{expr}':s=48000:d=12", "-c:a", "pcm_s24le", str(out)])
     return out, 4.0, 4.6, 11.5
+
+
+def need(module: str):
+    """Import an optional extra's module, or skip. CI sets CREATIVE_FORGE_REQUIRE_EXTRAS=1 so a missing extra fails
+    the job instead of quietly skipping its tests."""
+    if os.environ.get("CREATIVE_FORGE_REQUIRE_EXTRAS") == "1":
+        import importlib
+
+        return importlib.import_module(module)
+    return pytest.importorskip(module)

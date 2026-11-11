@@ -6,11 +6,12 @@ Unknown keys are rejected (``extra="forbid"``) so a typo in a spec fails before 
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, ValidationError, field_validator, model_validator
 
 FormatName = Literal["9:16", "4:5"]
 Box = tuple[int, int, int, int]
@@ -24,6 +25,22 @@ SafeName = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")]
 Lang = Annotated[str, Field(pattern=r"^[a-z]{2,3}(-[a-z0-9]{2,8})?$")]
 # Hand-set creative tags (dimension -> value or values), checked against the tag taxonomy by `forge plan`.
 Tags = dict[str, str | list[str]]
+# Text shown in the ad: one string for every language, or one per language ({en: "...", tr: "..."}).
+Localized = str | dict[str, str]
+# Ids of hook / segment / end-card variants; ad-name components (no dots, no underscores).
+VariantId = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9-]{0,31}$")]
+
+
+def localized(text: Localized | None, lang: str) -> str | None:
+    """The text for ``lang`` (a plain string applies to every language)."""
+    if text is None or isinstance(text, str):
+        return text
+    return text[lang]
+
+
+def _missing_langs(text: Localized | None, langs: list[str]) -> list[str]:
+    return [lng for lng in langs if isinstance(text, dict) and lng not in text]
+
 
 # Negative prompt sent with every Veo request in production.
 DEFAULT_VEO_NEGATIVE = (
@@ -216,7 +233,7 @@ class HookSpec(_Model):
     text_regions: list[Box] = Field(default_factory=list)  # x0, y0, x1, y1 in output pixels, blurred out
     effects: list[Effect] = Field(default_factory=list)
     patches: list[Patch] = Field(default_factory=list)
-    disclaimer: str | None = "Not gameplay footage"
+    disclaimer: Localized | None = "Not gameplay footage"
     audio_gain_db: float = 0.0
 
     @model_validator(mode="after")
@@ -262,22 +279,63 @@ class MusicSpec(_Model):
 
 class EndCardSpec(_Model):
     duration_s: float = Field(2.6, ge=0.5, le=10)
-    headline: str = "Try it yourself!"
-    button: str = "PLAY NOW"
+    headline: Localized = "Try it yourself!"
+    button: Localized = "PLAY NOW"
     logo: Path | None = None
     font: Path | None = None
     image: Path | None = None  # background image; default is the blurred last gameplay frame
 
 
+class Variants(_Model):
+    """A matrix: every hook x segment x end card x language becomes one render, exported in every format.
+
+    * ``hooks``: overrides merged over the concept's ``hook`` (plus their own ``tags``). Every hook lands on the
+      concept's ``gameplay`` first frame, so a hook is generated (and paid for) once, whatever it is combined with.
+    * ``segments``: more real gameplay played after the landing segment (a hard cut), merged over ``gameplay``, so
+      ``{id: lvl21, in_s: 30, out_s: 38}`` reuses its path and crop.
+    * ``end_cards``: overrides merged over ``end_card``.
+    * ``languages``: end-card text and disclaimer per language (``headline: {en: ..., tr: ...}``).
+    """
+
+    hooks: list[dict[str, Any]] = Field(default_factory=list)
+    segments: list[dict[str, Any]] = Field(default_factory=list)
+    end_cards: list[dict[str, Any]] = Field(default_factory=list)
+    languages: list[Lang] = Field(default_factory=list)
+
+
+def _resolve(kind: str, model: type[BaseModel], base: BaseModel, items: list[dict[str, Any]]) -> list[tuple[str, Any]]:
+    out, seen = [], set()
+    for i, raw in enumerate(items):
+        raw = dict(raw)
+        vid = raw.pop("id", None)
+        raw.pop("tags", None)
+        if not isinstance(vid, str) or not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,31}", vid):
+            raise ValueError(f"variants.{kind}[{i}].id must be lowercase a-z, 0-9 and '-' (got {vid!r})")
+        if vid in seen:
+            raise ValueError(f"variants.{kind}: duplicate id {vid!r}")
+        seen.add(vid)
+        try:
+            out.append((vid, model.model_validate({**base.model_dump(exclude_unset=True), **raw})))
+        except ValidationError as e:
+            first = e.errors()[0]
+            where = ".".join(str(x) for x in first["loc"])
+            raise ValueError(f"variants.{kind}[{vid}]: {where}: {first['msg']}") from None
+    return out
+
+
 class Concept(_Model):
     id: SafeName
-    gameplay: GameplaySpec
+    gameplay: GameplaySpec  # the landing segment: every hook lands on its first frame
     hook: HookSpec
     end_card: EndCardSpec = Field(default_factory=EndCardSpec)
     music: MusicSpec | None = None
     sfx: list[SFX] = Field(default_factory=list)
     formats: list[FormatName] = Field(default_factory=lambda: ["9:16", "4:5"], min_length=1)
     tags: Tags = Field(default_factory=dict)  # e.g. {hook_type: satisfying-clean, emotion: [satisfaction]}
+    variants: Variants | None = None
+    _hooks: list[tuple[str, HookSpec]] = PrivateAttr(default_factory=list)
+    _segments: list[tuple[str, GameplaySpec | None]] = PrivateAttr(default_factory=list)
+    _end_cards: list[tuple[str, EndCardSpec]] = PrivateAttr(default_factory=list)
 
     @field_validator("formats")
     @classmethod
@@ -285,6 +343,33 @@ class Concept(_Model):
         if len(set(v)) != len(v):
             raise ValueError("formats must be unique")
         return v
+
+    @model_validator(mode="after")
+    def _expand(self) -> Concept:
+        v = self.variants or Variants()
+        self._hooks = _resolve("hooks", HookSpec, self.hook, v.hooks) or [("main", self.hook)]
+        self._segments = _resolve("segments", GameplaySpec, self.gameplay, v.segments) or [("main", None)]
+        self._end_cards = _resolve("end_cards", EndCardSpec, self.end_card, v.end_cards) or [("main", self.end_card)]
+        if len(set(v.languages)) != len(v.languages):
+            raise ValueError("variants.languages must be unique")
+        return self
+
+    def hook_variants(self) -> list[tuple[str, HookSpec]]:
+        return list(self._hooks)
+
+    def segment_variants(self) -> list[tuple[str, GameplaySpec | None]]:
+        """``None``: no extra segment (the landing segment is the whole gameplay part)."""
+        return list(self._segments)
+
+    def end_card_variants(self) -> list[tuple[str, EndCardSpec]]:
+        return list(self._end_cards)
+
+    def hook_tags(self, hook_id: str) -> Tags:
+        """The concept's tags, overridden per dimension by the hook variant's own ``tags``."""
+        for raw in self.variants.hooks if self.variants else []:
+            if raw.get("id") == hook_id:
+                return {**self.tags, **(raw.get("tags") or {})}
+        return dict(self.tags)
 
 
 # ISO 3166-1 alpha-2 country codes, or EU / EEA / UK. Model licences with a territory clause are checked against it.
@@ -328,15 +413,40 @@ class AdSpec(_Model):
             raise ValueError("render must be portrait (the master is 9:16; 4:5 is derived from it)")
         x = self.render.crossfade_s
         for c in self.concepts:
-            if c.hook.effective_cut <= x + 0.1:
-                raise ValueError(f"{c.id}: hook cut must be longer than the crossfade")
             if c.gameplay.output_duration <= 2 * x + self.audio.gameplay_skip_s + 0.5:
                 raise ValueError(f"{c.id}: gameplay segment is too short for two crossfades")
-            boxes = [("patch box", p.box) for p in c.hook.patches] + [("edit_region", c.hook.edit_region)]
-            for what, box in boxes:
-                if box is not None and (box[2] > self.render.width or box[3] > self.render.height):
-                    raise ValueError(f"{c.id}: {what} outside the {self.render.width}x{self.render.height} frame")
+            for sid, seg in c.segment_variants():
+                if seg is not None and seg.output_duration < 1.0:
+                    raise ValueError(f"{c.id}: segment {sid} is shorter than 1 s")
+            langs = self.languages_for(c)
+            for hid, h in c.hook_variants():
+                where = c.id if hid == "main" else f"{c.id}/{hid}"
+                if h.effective_cut <= x + 0.1:
+                    raise ValueError(f"{where}: hook cut must be longer than the crossfade")
+                boxes = [("patch box", p.box) for p in h.patches] + [("edit_region", h.edit_region)]
+                for what, box in boxes:
+                    if box is not None and (box[2] > self.render.width or box[3] > self.render.height):
+                        raise ValueError(f"{where}: {what} outside the {self.render.width}x{self.render.height} frame")
+                if _missing_langs(h.disclaimer, langs):
+                    raise ValueError(f"{where}: disclaimer has no text for {_missing_langs(h.disclaimer, langs)}")
+            for eid, e in c.end_card_variants():
+                for name, text in (("headline", e.headline), ("button", e.button)):
+                    if _missing_langs(text, langs):
+                        raise ValueError(f"{c.id}: end card {eid} {name} has no text for {_missing_langs(text, langs)}")
         return self
+
+    def languages_for(self, c: Concept) -> list[str]:
+        return list(c.variants.languages) if c.variants and c.variants.languages else [self.language]
+
+    def matrix(self, c: Concept) -> list[tuple[str, HookSpec, str, GameplaySpec | None, str, EndCardSpec, str]]:
+        """Every (hook, segment, end card, language) render of a concept, in a stable order."""
+        return [
+            (hid, h, sid, seg, eid, e, lang)
+            for hid, h in c.hook_variants()
+            for sid, seg in c.segment_variants()
+            for eid, e in c.end_card_variants()
+            for lang in self.languages_for(c)
+        ]
 
     @property
     def image_edit_model(self) -> str:
@@ -365,13 +475,20 @@ def load_spec(path: str | Path) -> AdSpec:
     return spec
 
 
-def timeline_for(spec: AdSpec, concept: Concept) -> dict[str, float]:
-    """Output timeline of one ad (seconds). Crossfades overlap neighbours, so they are subtracted once each."""
+def timeline_for(
+    spec: AdSpec,
+    concept: Concept,
+    hook: HookSpec | None = None,
+    segment: GameplaySpec | None = None,
+    end_card: EndCardSpec | None = None,
+) -> dict[str, float]:
+    """Planned output timeline of one ad (seconds). Crossfades overlap neighbours, so they are subtracted once each.
+    An extra segment follows the landing segment with a hard cut, so its length simply adds."""
     x = spec.render.crossfade_s
-    hook = concept.hook.effective_cut
-    gameplay = concept.gameplay.output_duration
-    end = concept.end_card.duration_s
-    gameplay_start = hook - x
+    hook_s = (hook or concept.hook).effective_cut
+    gameplay = concept.gameplay.output_duration + (segment.output_duration if segment else 0.0)
+    end = (end_card or concept.end_card).duration_s
+    gameplay_start = hook_s - x
     end_card_start = gameplay_start + gameplay - x
     return {
         "hook_end": gameplay_start,

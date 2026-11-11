@@ -154,7 +154,7 @@ def models_in_use(spec: AdSpec) -> list[ModelUse]:
     """Every model a real run of this spec would call (a fake-provider spec is judged as the real run it rehearses)."""
     uses: list[ModelUse] = []
     real = "vertex"
-    if any(c.hook.image_prompt for c in spec.concepts):
+    if any(h.image_prompt for c in spec.concepts for _hid, h in c.hook_variants()):
         if spec.image_provider == "comfyui":
             uses.append(ModelUse("image_edit", spec.comfyui.checkpoint, "comfyui"))
         else:
