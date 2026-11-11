@@ -6,6 +6,7 @@ import re
 from dataclasses import dataclass
 
 from creative_forge.spec import AdSpec, Concept
+from creative_forge.tags import Taxonomy
 
 
 @dataclass(frozen=True)
@@ -13,6 +14,10 @@ class LintIssue:
     concept: str
     rule: str
     message: str
+    severity: str = "warn"  # "error" blocks `forge plan` (exit 1) and `forge run` before any call
+
+
+TAG_DIMENSIONS_WANTED = ("hook_type", "mechanic_shown", "emotion")
 
 
 _HAND = re.compile(r"\b(hand|hands|finger|fingers|tool|nozzle|lance|torch|blower|brush|knife)\b", re.I)
@@ -81,5 +86,24 @@ def lint_concept(spec: AdSpec, c: Concept) -> list[LintIssue]:
     return issues
 
 
+def lint_tags(spec: AdSpec, c: Concept) -> list[LintIssue]:
+    taxonomy = Taxonomy.load(spec.resolve(spec.taxonomy))
+    issues = [LintIssue(c.id, rule, msg, "error") for rule, msg in taxonomy.problems(c.tags, f"{c.id}.tags")]
+    missing = [d for d in TAG_DIMENSIONS_WANTED if d in taxonomy.dimensions and d not in c.tags]
+    if missing:
+        issues.append(
+            LintIssue(
+                c.id,
+                "untagged",
+                f"no {', '.join(missing)} tag: `forge perf report` cannot group this concept's results by it",
+            )
+        )
+    return issues
+
+
 def lint(spec: AdSpec) -> list[LintIssue]:
-    return [i for c in spec.concepts for i in lint_concept(spec, c)]
+    return [i for c in spec.concepts for i in lint_concept(spec, c) + lint_tags(spec, c)]
+
+
+def errors(issues: list[LintIssue]) -> list[LintIssue]:
+    return [i for i in issues if i.severity == "error"]

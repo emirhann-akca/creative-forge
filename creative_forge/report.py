@@ -116,6 +116,9 @@ def report_dict(rr: RunResult) -> dict[str, Any]:
                     {
                         "format": e.format,
                         "file": e.path.name,
+                        "creative_id": e.creative.creative_id if e.creative else None,
+                        "ad_name": e.creative.ad_name if e.creative else None,
+                        "tags": e.tags,
                         "status": e.status.value,
                         "checks": [x.to_dict() for x in e.checks],
                     }

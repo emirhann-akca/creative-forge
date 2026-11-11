@@ -209,12 +209,35 @@ Verified on 10 Nov 2026 on an Apple Silicon Mac (M4, 24 GB) with `sd_xl_base_1.0
 
 ```bash
 forge review out/puzzle-ads --reviewer ayse                  # interactive: a / r / s and a note per export
-forge review out/puzzle-ads --approve puzzle-ads_dust-blower_9x16.mp4 --note "hook reads well"
+forge review out/puzzle-ads --approve cf1.puzzle-ads.dust-blower.main.main.main.9x16.en.6453fdb366.mp4 --note "hook reads well"
 forge publish out/puzzle-ads --to deliver/                   # refuses if an approved export failed QA
 forge publish out/puzzle-ads --to deliver/ --override "network re-encodes audio anyway"
 ```
 
 Decisions go to `review.json` next to the run, each with reviewer, time, QA status and the file's SHA-256. Publishing copies nothing when nothing is approved, when an approved file changed after review, or when an approved export (or its concept's generation checks) has a failed check and no override reason. `manifest.json` lists what was published, by whose approval, what was overridden and why, and what was left out.
+
+## Creative IDs, ad names and tags
+
+Every export is one creative: (spec, concept, hook, gameplay segment, end card, format, language). Its ID is a hash of those seven names, and its ad name carries all of them plus the ID:
+
+```
+cf1.<spec>.<concept>.<hook>.<segment>.<end_card>.<format>.<language>.<creative_id>
+cf1.puzzle-ads.dust-blower.main.main.main.9x16.en.6453fdb366
+```
+
+- **Deterministic.** The ID depends only on the names in the spec, so re-rendering a variant keeps its ID. A concept without variants uses `main` for hook, segment and end card; `language:` (default `en`) sets the language.
+- **Round-trips.** `naming.parse(name)` returns the seven names and refuses a name whose ID does not match them, so a hand-edited name is not booked against the wrong creative. `naming.find(text)` finds the name inside a longer one (`"… - Copy (2)"`), which is how `forge perf import` maps network ad names back.
+- **The file name is the ad name** (`<ad name>.mp4`), so whatever the uploader keeps maps back.
+
+**Tags** come from a controlled vocabulary, [`data/tag_taxonomy.yaml`](creative_forge/data/tag_taxonomy.yaml) (or your own with `taxonomy: my_tags.yaml`): `hook_type`, `mechanic_shown` and `emotion` are set per concept (and per hook variant); `format`, `length_bucket` and `ai_generated` are derived per export. An unknown dimension or value, a list for a single-value dimension, or a hand-set derived tag fails lint: `forge plan` exits 1 and `forge run` exits 2 before any call. A concept without tags only warns, because `forge perf report` cannot group it.
+
+```yaml
+concepts:
+  - id: dust-blower
+    tags: {hook_type: satisfying-clean, mechanic_shown: [goods-sort], emotion: [satisfaction]}
+```
+
+Each export's `.forge.json` sidecar holds `creative_id`, `ad_name`, the seven `ids`, the `tags` and the `models` that made it with their licences; `report.json` carries the ID, name and tags, and `forge publish` copies all of it into `manifest.json`. `forge ideate` drafts fill `hook_type` and `emotion` from the taxonomy's values and leave `mechanic_shown` to a person.
 
 ## `forge ideate`: concepts from a tool-calling model
 

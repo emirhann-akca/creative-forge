@@ -8,6 +8,9 @@ version: 1
 name: puzzle-ads
 providers: vertex
 output_dir: out/puzzle-ads
+language: en                # end-card language; part of every ad name
+targets:
+  regions: [TR, US, DE]     # where the ads run: model licences with a territory clause are checked against it
 
 render:
   width: 1080
@@ -69,6 +72,7 @@ concepts:
       volume_db: -19
       start_offset_s: 2.5             # music reaches full level as the gameplay appears
     formats: ["9:16", "4:5"]
+    tags: {hook_type: satisfying-clean, mechanic_shown: [goods-sort], emotion: [satisfaction]}
 
   - id: pressure-wash
     gameplay:
@@ -101,3 +105,4 @@ concepts:
       volume_db: -19
       start_offset_s: 2.4
     formats: ["9:16", "4:5"]
+    tags: {hook_type: real-hand, mechanic_shown: [goods-sort], emotion: [satisfaction, calm]}

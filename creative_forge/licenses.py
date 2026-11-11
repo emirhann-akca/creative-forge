@@ -142,7 +142,7 @@ class LicenseReport:
         for r in rows:
             out.append("  ".join(c.ljust(w) for c, w in zip(r[:4], widths, strict=True)) + "  " + r[4])
         out.insert(1, "  ".join("-" * w for w in widths) + "  " + "-" * 6)
-        out.append(f"licence registry as of {self.registry_as_of}; sources: forge licenses --list")
+        out.append(f"licence registry as of {self.registry_as_of}; sources: `forge licenses`")
         return "\n".join(out)
 
     def raise_if_refused(self) -> None:

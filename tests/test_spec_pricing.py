@@ -140,6 +140,7 @@ def test_lint_rules():
     h["image_prompt"] = "Add a hand holding a leaf blower, entering from the bottom right corner. Do not add any text."
     h["cut_s"] = 4.5
     h["text_regions"] = [[0, 0, 10, 10]]
+    d["concepts"][0]["tags"] = {"hook_type": "real-hand", "mechanic_shown": ["goods-sort"], "emotion": ["calm"]}
     assert lint(AdSpec.model_validate(d)) == []
 
     h["cut_s"] = 5.6  # inside the last 3 s without patches

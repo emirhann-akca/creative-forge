@@ -15,7 +15,9 @@
 | `stages/audio.py` | Mix (padded FX bus, sidechain ducking), master loop, mux. |
 | `stages/export.py` | 9:16 and 4:5 encodes with a size-aware maxrate. |
 | `qa/` | Checks that return `CheckResult(status, value, threshold, message, details)`. `runner.py` reads the `.forge.json` sidecar. |
-| `lint.py` | Plan-time rules learned in production, checked before any spend. |
+| `lint.py` | Plan-time rules learned in production, checked before any spend. Issues carry a severity; `error` (unknown tags) blocks `forge plan` and `forge run`. |
+| `naming.py` | `CreativeIds`: the seven names of one export, its deterministic `creative_id` (SHA-256 prefix) and the `cf1.` ad name; `parse()` checks the ID, `find()` locates a name inside a longer string. |
+| `tags.py`, `data/tag_taxonomy.yaml` | The tag vocabulary, lint of hand-set tags, and the derived tags (`format`, `length_bucket`, `ai_generated`) added per export. |
 | `licenses.py`, `data/model_licenses.yaml` | Licence registry (code and weights licence, commercial status, conditions, source, date checked) and the guard: `models_in_use(spec)` lists every model a real run would call, `check()` gives each a verdict against `targets:` (`refuse`, `warn`, `ok`, `service`), and `--license-override MODEL=REASON` turns one refusal into an `overridden` entry that the ledger records. `Pipeline.run()` checks again before any generation, so library callers get the same guard as the CLI. |
 | `pipeline.py` | One job per concept in a private temp dir, a thread pool across concepts, then the blind judge. |
 | `report.py` | Self-contained HTML (inline CSS, base64 contact sheets) and a JSON twin. |
@@ -36,7 +38,7 @@
 5. **Assembly.** `xfade` the hook into the gameplay, then the gameplay into the end card, each over `crossfade_s`. The disclaimer overlay is enabled only before the first crossfade.
 6. **Mix.** Hook audio sits at 0 and gameplay audio at the gameplay start, with optional SFX (delay, gain, pitch). These are summed with `amix=normalize=0` and padded with `apad=whole_dur=<total>`. Music is faded in (0.4 s) and out (0.6 s), padded and trimmed, then ducked under the bus with `sidechaincompress=threshold=0.05:ratio=4:attack=5:release=250`. A final limiter at 0.95.
 7. **Master.** See below.
-8. **Mux and export.** The pipeline muxes with an explicit `-t` (never `-shortest`), then encodes 9:16 and 4:5 with `crf 20`, `maxrate = min(3600k, size budget)`, `bufsize = 2 x maxrate`. Each export gets a `.forge.json` sidecar with its format, size, timeline and overlay regions.
+8. **Mux and export.** The pipeline muxes with an explicit `-t` (never `-shortest`), then encodes 9:16 and 4:5 with `crf 20`, `maxrate = min(3600k, size budget)`, `bufsize = 2 x maxrate`. Each export is named after its ad name and gets a `.forge.json` sidecar with its creative ID, ad name, tags, the models that made it (with licences), format, size, timeline and overlay regions.
 9. **QA.** Every check runs on every export. The 4:5 variant skips seam, cadence and OCR, which were already measured on the 9:16 master it is derived from.
 
 After all concepts finish, the 9:16 exports are shuffled, code-named `V01..Vn`, and judged `judge_runs` times each.

@@ -27,8 +27,11 @@ from creative_forge.generator import Generator
 from creative_forge.imaging import disclaimer_overlay, prepare_first_frame, restore_outside
 from creative_forge.ledger import BudgetGuard, CostLedger
 from creative_forge.licenses import check as check_licenses
+from creative_forge.licenses import describe as describe_license
 from creative_forge.licenses import override_records
 from creative_forge.lint import LintIssue, lint
+from creative_forge.lint import errors as lint_errors
+from creative_forge.naming import CreativeIds, format_token
 from creative_forge.pricing import Plan, Pricing, estimate
 from creative_forge.providers.base import ImageEditRequest, JudgeRequest, MusicRequest, ProviderSet, VideoRequest
 from creative_forge.qa.judge import aggregate, blind_codes, check_judge, judge_prompt
@@ -40,6 +43,7 @@ from creative_forge.spec import AdSpec, Concept
 from creative_forge.stages.audio import Placed, master, mix, mux, sfx_placements
 from creative_forge.stages.export import export_4x5, export_9x16, size_4x5
 from creative_forge.stages.video import assemble, prepare_gameplay, prepare_hook, render_end_card
+from creative_forge.tags import export_tags
 
 
 @dataclass
@@ -47,6 +51,8 @@ class ExportResult:
     format: str
     path: Path
     checks: list[CheckResult]
+    creative: CreativeIds | None = None
+    tags: dict[str, Any] = field(default_factory=dict)
 
     @property
     def status(self) -> Status:
@@ -264,8 +270,13 @@ class Pipeline:
             res.master = m.to_dict()
             muxed = mux(assembled, m.path, work / "master.mp4", tl["total"])
 
+            models = self.models_for(
+                c.hook.image_prompt is not None, c.music is not None and c.music.prompt is not None
+            )
             for fmt in c.formats:
-                out = self.out_dir / f"{spec.name}_{c.id}_{fmt.replace(':', 'x')}.mp4"
+                ids = CreativeIds(spec.name, c.id, "main", "main", "main", format_token(fmt), spec.language)
+                out = self.out_dir / f"{ids.ad_name}.mp4"
+                tags = export_tags(c.tags, ids.format, tl["total"])
                 self.log(f"[{c.id}] export {fmt}")
                 if fmt == "9:16":
                     export_9x16(muxed, out, tl["total"], e)
@@ -276,6 +287,11 @@ class Pipeline:
                 write_sidecar(
                     out,
                     {
+                        "creative_id": ids.creative_id,
+                        "ad_name": ids.ad_name,
+                        "ids": ids.to_dict(),
+                        "tags": tags,
+                        "models": models,
                         "concept": c.id,
                         "format": fmt,
                         "size": list(size),
@@ -292,6 +308,8 @@ class Pipeline:
                         run_video_checks(
                             out, spec.qa, a, e, expect_format=fmt, expect_size=size, ocr=self.ocr, derived=derived
                         ),
+                        ids,
+                        tags,
                     )
                 )
 
@@ -306,7 +324,7 @@ class Pipeline:
                     ("gameplay", (tl["gameplay_start"] + tl["gameplay_end"]) / 2),
                     ("end card", tl["end_card_start"] + (tl["total"] - tl["end_card_start"]) * 0.7),
                 ],
-                self.out_dir / f"{spec.name}_{c.id}_sheet.jpg",
+                self.out_dir / f"{res.exports[0].creative.variant if res.exports[0].creative else c.id}.sheet.jpg",
             )
             if not self.keep_work:
                 shutil.rmtree(work, ignore_errors=True)
@@ -316,6 +334,17 @@ class Pipeline:
             self.log(f"[{c.id}] FAILED: {res.error}\n{traceback.format_exc(limit=3)}")
         res.seconds = round(time.time() - t0, 1)
         return res
+
+    def models_for(self, image_edit: bool, music: bool) -> list[dict[str, Any]]:
+        """The models behind one export and their licences (sidecar and publish manifest)."""
+        spec, p = self.spec, self.gen.providers
+        used: list[tuple[str, str, str]] = []
+        if image_edit:
+            used.append(("image_edit", spec.image_edit_model, p.image_edit.name))
+        used.append(("video", spec.models.video, p.video.name))
+        if music:
+            used.append(("music", spec.models.music, p.music.name))
+        return [{"role": r, "model": m, "provider": prov, "license": describe_license(m)} for r, m, prov in used]
 
     # ---------------------------------------------------------------------------------------------------- judge
     def judge(self, results: list[ConceptResult]) -> dict[str, str]:
@@ -357,6 +386,9 @@ class Pipeline:
         if unknown:  # a typo here used to produce an empty, "successful" run
             raise ValueError(f"--only: no concept with id {', '.join(unknown)} in {self.spec.name}")
         concepts = [c for c in self.spec.concepts if not only or c.id in only]
+        blocking = lint_errors(lint(self.spec))
+        if blocking:
+            raise ValueError("; ".join(f"{i.concept}: [{i.rule}] {i.message}" for i in blocking))
         licences = check_licenses(self.spec, self.license_overrides)
         licences.raise_if_refused()  # before any generation: a refused model is never called
         self.ledger.license_overrides = override_records(licences)

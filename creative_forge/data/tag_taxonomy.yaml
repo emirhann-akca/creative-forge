@@ -1,0 +1,44 @@
+# Creative tag taxonomy: the controlled vocabulary `forge plan` checks concept and hook tags against.
+#
+# A tag outside this vocabulary fails lint, so performance can be grouped per tag without "fail", "fail-state" and
+# "failstate" becoming three groups. Replace it with your own file (`taxonomy: my_tags.yaml` in the spec); keep the
+# derived dimensions, which the pipeline fills in itself for every export.
+#
+#   multi: true    the dimension takes a list of values (a hook can show two emotions)
+#   derived: true  computed per export; setting it in a spec is an error
+version: 1
+dimensions:
+  hook_type:
+    description: What the first seconds do to stop the scroll.
+    values:
+      - satisfying-clean     # dust, mud, frost or mess cleared to reveal the board
+      - fail-state           # the player (or a hand) visibly gets it wrong
+      - near-miss            # almost solved, one move left
+      - challenge            # "only 1% can solve this"
+      - before-after         # messy board, then the solved board
+      - reveal               # something hidden is uncovered
+      - rescue               # a character or item has to be saved
+      - asmr                 # sound-led, close-up, slow
+      - tutorial             # shows how to play
+      - real-hand            # a real hand or tool interacts with the game
+      - character-reaction   # a mascot or person reacts
+  mechanic_shown:
+    description: The core mechanic the gameplay part shows.
+    multi: true
+    values: [goods-sort, merge, match-3, tile-match, block-puzzle, physics, idle, runner, hidden-object, word, other]
+  emotion:
+    description: What the viewer should feel.
+    multi: true
+    values: [satisfaction, curiosity, frustration, surprise, humor, calm, urgency, competition]
+  format:
+    description: Delivered aspect ratio.
+    derived: true
+    values: ["9x16", "4x5"]
+  length_bucket:
+    description: Delivered length (seconds).
+    derived: true
+    values: [s00-15, s16-30, s31-45, s46-60, s61plus]
+  ai_generated:
+    description: Whether any picture in the export was made by a generative model (every forge hook is).
+    derived: true
+    values: ["yes", "no"]

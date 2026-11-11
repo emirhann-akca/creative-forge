@@ -9,6 +9,7 @@ import pytest
 
 from creative_forge.cli import main
 from creative_forge.ffmpeg import probe
+from creative_forge.naming import parse
 from creative_forge.qa.result import Status
 
 EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "ads.yaml"
@@ -73,7 +74,14 @@ def test_demo_end_to_end(tmp_path):
     for e in exports:
         info = probe(e.path)
         assert abs(info.video_duration - info.audio_duration) < 0.1
-        assert (e.path.parent / (e.path.name + ".forge.json")).exists()
+        side = json.loads((e.path.parent / (e.path.name + ".forge.json")).read_text(encoding="utf-8"))
+        ids = parse(side["ad_name"])  # the file name is the ad name, and it round-trips
+        assert (
+            e.path.name == side["ad_name"] + ".mp4" and ids.creative_id == side["creative_id"] == e.creative.creative_id
+        )
+        assert side["tags"]["format"] == ids.format and side["tags"]["ai_generated"] == "yes"
+        assert side["tags"]["hook_type"] in ("satisfying-clean", "real-hand")
+        assert [m["role"] for m in side["models"]] == ["image_edit", "video", "music"]
     by_check = {x.check: x for x in exports[0].checks}
     for name in ("loudness", "true_peak", "hook_gameplay_loudness", "av_duration", "cadence", "seam"):
         assert by_check[name].status is Status.PASS, by_check[name]
@@ -90,4 +98,8 @@ def test_demo_end_to_end(tmp_path):
     again = run_demo(tmp_path / "demo", log=lambda _: None)
     gen = [e for e in again.ledger.entries if e.stage in ("image_edit", "video", "music")]
     assert gen and all(e.cached for e in gen)
+    # ... and keeps every creative ID: a re-render is the same creative
+    assert sorted(x.creative.ad_name for c in again.concepts for x in c.exports) == sorted(
+        x.creative.ad_name for x in exports
+    )
     assert json.loads(js.read_text(encoding="utf-8"))["concepts"][0]["exports"][0]["format"] == "9:16"

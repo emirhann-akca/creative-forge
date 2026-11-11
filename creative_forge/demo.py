@@ -94,6 +94,11 @@ def demo_spec(out_dir: Path, gameplay: Path) -> dict:
                 "end_card": {"headline": "Try it yourself!", "button": "PLAY NOW"},
                 "music": {"prompt": "Upbeat playful puzzle game loop, bright marimba, 120 bpm", "volume_db": -19},
                 "formats": ["9:16", "4:5"],
+                "tags": {
+                    "hook_type": "satisfying-clean",
+                    "mechanic_shown": ["goods-sort"],
+                    "emotion": ["satisfaction"],
+                },
             },
             {
                 "id": "mud-wash",
@@ -111,6 +116,11 @@ def demo_spec(out_dir: Path, gameplay: Path) -> dict:
                 "end_card": {"headline": "Fill every order!", "button": "PLAY NOW"},
                 "music": {"prompt": "Calm lo-fi groove for a cozy puzzle game", "volume_db": -20},
                 "formats": ["9:16", "4:5"],
+                "tags": {
+                    "hook_type": "real-hand",
+                    "mechanic_shown": ["goods-sort"],
+                    "emotion": ["satisfaction", "calm"],
+                },
             },
         ],
     }

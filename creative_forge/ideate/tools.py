@@ -15,12 +15,18 @@ from pydantic import ValidationError
 
 from creative_forge.ffmpeg import probe
 from creative_forge.ideate.library import LibraryIndex
-from creative_forge.lint import lint_concept
+from creative_forge.lint import lint_concept, lint_tags
 from creative_forge.pricing import Pricing, estimate
 from creative_forge.spec import AdSpec
+from creative_forge.tags import Taxonomy
 
-# Rules a model cannot satisfy from text alone: text_regions are pixel boxes on the real frame.
-HUMAN_TODO = {"strip-text": "fill hook.text_regions with the text boxes of the real first frame"}
+# Rules a model cannot satisfy from text alone: text_regions are pixel boxes on the real frame, and the game's
+# mechanic is a fact about the game, not a creative choice.
+HUMAN_TODO = {
+    "strip-text": "fill hook.text_regions with the text boxes of the real first frame",
+    "untagged": "complete the concept's tags (hook_type, mechanic_shown, emotion) from the tag taxonomy",
+}
+_TAXONOMY = Taxonomy.load()
 
 DRAFT = {
     "type": "OBJECT",
@@ -43,6 +49,16 @@ DRAFT = {
         },
         "headline": {"type": "STRING", "description": "end-card headline, at most 4 words"},
         "music_prompt": {"type": "STRING", "description": "instrumental music prompt"},
+        "hook_type": {
+            "type": "STRING",
+            "enum": list(_TAXONOMY.dimensions["hook_type"].values),
+            "description": "what the hook does to stop the scroll (tag taxonomy)",
+        },
+        "emotion": {
+            "type": "STRING",
+            "enum": list(_TAXONOMY.dimensions["emotion"].values),
+            "description": "the main emotion the hook aims for (tag taxonomy)",
+        },
         "rationale": {"type": "STRING", "description": "which library entries this concept draws on, and why"},
     },
     "required": ["id", "clip", "in_s", "out_s", "image_prompt", "video_prompt", "duration_s", "cut_s", "headline"],
@@ -106,6 +122,13 @@ def to_concept(d: dict[str, Any]) -> dict[str, Any]:
     }
     if d.get("music_prompt"):
         concept["music"] = {"prompt": d["music_prompt"]}
+    tags: dict[str, Any] = {}
+    if d.get("hook_type"):
+        tags["hook_type"] = d["hook_type"]
+    if d.get("emotion"):
+        tags["emotion"] = [d["emotion"]]
+    if tags:
+        concept["tags"] = tags
     return concept
 
 
@@ -165,7 +188,7 @@ class Toolbox:
             blocking += [f"invalid: {'.'.join(map(str, x['loc']))}: {x['msg']}" for x in e.errors()]
             return None, blocking, []
         todo = []
-        for issue in lint_concept(spec, spec.concepts[0]):
+        for issue in lint_concept(spec, spec.concepts[0]) + lint_tags(spec, spec.concepts[0]):
             if issue.rule in HUMAN_TODO:
                 todo.append(f"{issue.rule}: {HUMAN_TODO[issue.rule]}")
             else:

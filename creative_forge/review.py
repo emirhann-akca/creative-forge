@@ -20,7 +20,7 @@ import getpass
 import json
 import os
 import shutil
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -44,6 +44,9 @@ class ExportRecord:
     status: str
     failed: tuple[str, ...]  # failed checks of this export and of its concept's generation checks
     warned: tuple[str, ...]
+    creative_id: str | None = None  # naming.CreativeIds (absent in reports written before creative IDs existed)
+    ad_name: str | None = None
+    tags: dict[str, Any] = field(default_factory=dict)
 
 
 def load_exports(run_dir: Path) -> list[ExportRecord]:
@@ -64,6 +67,9 @@ def load_exports(run_dir: Path) -> list[ExportRecord]:
                     status=e["status"],
                     failed=tuple(x["check"] for x in checks if x["status"] == "fail"),
                     warned=tuple(x["check"] for x in checks if x["status"] == "warn"),
+                    creative_id=e.get("creative_id"),
+                    ad_name=e.get("ad_name"),
+                    tags=dict(e.get("tags") or {}),
                 )
             )
     return out
@@ -135,9 +141,14 @@ def publish(run_dir: Path, dest: Path, override: str | None = None, now: datetim
     published = []
     for r, d in approved:
         shutil.copy2(run_dir / r.file, dest / r.file)
+        side = _sidecar(run_dir / r.file)
         published.append(
             {
                 "file": r.file,
+                "creative_id": r.creative_id,
+                "ad_name": r.ad_name,
+                "tags": r.tags,
+                "models": side.get("models", []),
                 "concept": r.concept,
                 "format": r.format,
                 "sha256": d["sha256"],
@@ -162,6 +173,14 @@ def publish(run_dir: Path, dest: Path, override: str | None = None, now: datetim
     }
     _write_json(dest / MANIFEST_FILE, manifest)
     return dest / MANIFEST_FILE
+
+
+def _sidecar(video: Path) -> dict[str, Any]:
+    p = video.parent / (video.name + ".forge.json")
+    try:
+        return json.loads(p.read_text(encoding="utf-8")) if p.is_file() else {}
+    except (OSError, ValueError):
+        return {}
 
 
 def _plain_name(name: str) -> str:

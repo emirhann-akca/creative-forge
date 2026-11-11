@@ -18,8 +18,12 @@ Box = tuple[int, int, int, int]
 X264Preset = Literal["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow"]
 # Model IDs end up in REST URL paths (.../models/{id}:method), so they must be plain identifiers.
 ModelId = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9._@-]{0,127}$")]
-# Names and ids become output file names: no separators, no "..".
+# Names and ids become output file names and ad-name components: no separators, no dots.
 SafeName = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")]
+# Lowercase BCP 47-style language tag ("en", "tr", "pt-br"); part of every ad name.
+Lang = Annotated[str, Field(pattern=r"^[a-z]{2,3}(-[a-z0-9]{2,8})?$")]
+# Hand-set creative tags (dimension -> value or values), checked against the tag taxonomy by `forge plan`.
+Tags = dict[str, str | list[str]]
 
 # Negative prompt sent with every Veo request in production.
 DEFAULT_VEO_NEGATIVE = (
@@ -273,6 +277,7 @@ class Concept(_Model):
     music: MusicSpec | None = None
     sfx: list[SFX] = Field(default_factory=list)
     formats: list[FormatName] = Field(default_factory=lambda: ["9:16", "4:5"], min_length=1)
+    tags: Tags = Field(default_factory=dict)  # e.g. {hook_type: satisfying-clean, emotion: [satisfaction]}
 
     @field_validator("formats")
     @classmethod
@@ -308,6 +313,8 @@ class AdSpec(_Model):
     audio: AudioSpec = Field(default_factory=AudioSpec)
     qa: QASpec = Field(default_factory=QASpec)
     targets: Targets = Field(default_factory=Targets)
+    language: Lang = "en"  # language of the end-card text; part of every ad name
+    taxonomy: Path | None = None  # tag taxonomy YAML; None: the bundled one (data/tag_taxonomy.yaml)
     concepts: list[Concept] = Field(min_length=1)
     base_dir: Path = Field(default=Path("."), exclude=True)
 

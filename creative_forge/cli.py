@@ -12,6 +12,7 @@ from pathlib import Path
 from creative_forge import __version__
 from creative_forge.config import ENV_PROJECT, ConfigError, Settings
 from creative_forge.ledger import BudgetExceeded
+from creative_forge.lint import errors as lint_errors
 from creative_forge.lint import lint
 from creative_forge.pricing import Pricing, estimate
 from creative_forge.qa.result import CheckResult, Status, worst
@@ -65,9 +66,9 @@ def cmd_plan(a: argparse.Namespace) -> int:
     if issues:
         print("\nspec lint:")
         for i in issues:
-            print(f"  {i.concept}: [{i.rule}] {i.message}")
+            print(f"  {'ERROR ' if i.severity == 'error' else ''}{i.concept}: [{i.rule}] {i.message}")
     report, _ = _licence_report(spec, a)
-    return 1 if report.refused else 0
+    return 1 if report.refused or lint_errors(issues) else 0
 
 
 def cmd_licenses(a: argparse.Namespace) -> int:
@@ -101,6 +102,11 @@ def cmd_run(a: argparse.Namespace) -> int:
     licences, overrides = _licence_report(spec, a)
     if licences.refused:
         return 4
+    blocking = lint_errors(lint(spec))
+    for i in blocking:
+        print(f"error: {i.concept}: [{i.rule}] {i.message}", file=sys.stderr)
+    if blocking:
+        return 2
     if a.dry_run:
         print(plan.table())
         problems = []
