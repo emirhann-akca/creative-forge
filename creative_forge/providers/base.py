@@ -129,3 +129,4 @@ class ProviderSet:
     video: VideoProvider
     music: MusicProvider
     judge: JudgeProvider
+    routing: list[dict[str, Any]] = field(default_factory=list)  # local-vs-cloud decisions, copied into the ledger

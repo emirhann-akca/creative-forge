@@ -86,6 +86,86 @@ class ComfyUISpec(_Model):
     timeout_s: float = Field(900, gt=0)
 
 
+ModelFile = Annotated[str, Field(pattern=r"^[\w.+-]+\.(safetensors|ckpt|gguf|pt|pth|bin)$")]
+
+# Per-workflow defaults. File names are the ones in Comfy-Org's repackaged Wan repositories on Hugging Face
+# (Wan_2.1_ComfyUI_repackaged, Wan_2.2_ComfyUI_Repackaged; apache-2.0, listed 2026-11-11). Sampler values are starting
+# points to tune on the worker, not measured: no GPU run has been made with them yet.
+WAN_WORKFLOWS: dict[str, dict[str, Any]] = {
+    "wan21_flf2v": {
+        "diffusion_model": "wan2.1_flf2v_720p_14B_fp16.safetensors",
+        "vae": "wan_2.1_vae.safetensors",
+        "clip_vision": "clip_vision_h.safetensors",
+        "width": 720,
+        "height": 1280,
+        "fps": 16,
+        "steps": 20,
+        "cfg": 5.0,
+        "multiple": 16,
+        "last_frame": True,
+    },
+    "wan22_ti2v_5b": {
+        "diffusion_model": "wan2.2_ti2v_5B_fp16.safetensors",
+        "vae": "wan2.2_vae.safetensors",
+        "clip_vision": None,
+        "width": 704,
+        "height": 1280,
+        "fps": 24,
+        "steps": 30,
+        "cfg": 5.0,
+        "multiple": 32,
+        "last_frame": False,
+    },
+}
+
+
+class ComfyUIVideoSpec(_Model):
+    """Hook video on a ComfyUI worker (``video_provider: comfyui``) with Wan. ``wan21_flf2v`` lands on the real
+    gameplay frame (first frame + last frame, the same recipe as Veo's ``lastFrame``); ``wan22_ti2v_5b`` is plain
+    image-to-video for 8 GB cards and relies on the crossfade, patches and the landing check instead."""
+
+    workflow: Literal["wan21_flf2v", "wan22_ti2v_5b"] = "wan21_flf2v"
+    diffusion_model: ModelFile | None = None  # None: the workflow's default file
+    text_encoder: ModelFile = "umt5_xxl_fp8_e4m3fn_scaled.safetensors"
+    vae: ModelFile | None = None
+    clip_vision: ModelFile | None = None
+    width: int | None = Field(None, ge=64, le=2048)
+    height: int | None = Field(None, ge=64, le=2048)
+    fps: int | None = Field(None, ge=8, le=60)
+    steps: int | None = Field(None, ge=1, le=100)
+    cfg: float | None = Field(None, gt=0, le=20)
+    shift: float = Field(8.0, gt=0, le=50)
+    sampler: Annotated[str, Field(pattern=r"^[a-z0-9_]+$")] = "uni_pc"
+    scheduler: Annotated[str, Field(pattern=r"^[a-z0-9_]+$")] = "simple"
+    seed: int = Field(7, ge=0)
+    timeout_s: float = Field(3600, gt=0)  # a 14B clip with offloading can take tens of minutes
+    # Only with this set may the run use the cloud video model (`models.video`, budget-guarded) when the worker is
+    # unreachable or lacks a node or a model file. The ledger records which one ran.
+    cloud_fallback: bool = False
+
+    def setting(self, name: str) -> Any:
+        value = getattr(self, name)
+        return WAN_WORKFLOWS[self.workflow][name] if value is None else value
+
+    def model_files(self) -> dict[str, str]:
+        files = {
+            "diffusion_model": self.setting("diffusion_model"),
+            "text_encoder": self.text_encoder,
+            "vae": self.setting("vae"),
+        }
+        if WAN_WORKFLOWS[self.workflow]["clip_vision"]:
+            files["clip_vision"] = self.setting("clip_vision")
+        return files
+
+    @model_validator(mode="after")
+    def _sizes(self) -> ComfyUIVideoSpec:
+        m = WAN_WORKFLOWS[self.workflow]["multiple"]
+        for name in ("width", "height"):
+            if self.setting(name) % m:
+                raise ValueError(f"comfyui_video.{name} must be a multiple of {m} for {self.workflow}")
+        return self
+
+
 class RenderSpec(_Model):
     width: int = Field(1080, ge=64)
     height: int = Field(1920, ge=64)
@@ -391,6 +471,8 @@ class AdSpec(_Model):
     providers: Literal["vertex", "fake"] = "vertex"
     image_provider: Literal["comfyui"] | None = None  # None: same as `providers`
     comfyui: ComfyUISpec = Field(default_factory=ComfyUISpec)
+    video_provider: Literal["comfyui"] | None = None  # None: same as `providers` (Veo)
+    comfyui_video: ComfyUIVideoSpec = Field(default_factory=ComfyUIVideoSpec)
     output_dir: Path = Path("out")
     models: Models = Field(default_factory=Models)
     render: RenderSpec = Field(default_factory=RenderSpec)

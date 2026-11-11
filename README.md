@@ -21,6 +21,7 @@ forge perf import meta --account act_1 ...  # creative-level metrics from Meta /
 forge perf report --write-lessons           # IPM, CTR, CPI, hook rate per creative and tag, with intervals
 forge setup ffmpeg                          # pinned ffmpeg 9.0.2, SHA-256 verified, no admin rights
 forge doctor                                # ffmpeg, OCR, folders, ComfyUI, credentials; exit 1 on a blocker
+forge comfy check                           # a ComfyUI GPU worker: VRAM, missing Wan nodes and model files
 ```
 
 ![QA report from forge demo](docs/img/qa-report.png)
@@ -35,6 +36,10 @@ forge doctor                                # ffmpeg, OCR, folders, ComfyUI, cre
 - **A local open-model path**: SDXL through a local ComfyUI server for the hook image edit, with the workflow shipped as JSON.
 - **Agentic ideation**: Gemini function calling over five local tools, with retrieval over the lesson library. It stops when its concepts pass the pipeline's own validation and lint.
 - **Human in the loop**: `forge review` records decisions against file hashes; `forge publish` copies only approved, QA-clean exports with a manifest.
+- **A performance loop**: deterministic creative IDs and ad names that round-trip, a tag taxonomy, `forge perf import` from Meta, AppLovin and CSV exports into SQLite, `forge perf report` with intervals (no winner on a small sample), and lessons that `forge ideate` retrieves.
+- **More exports per paid generation**: a variant matrix (hooks × segments × end cards × languages × formats) that pays once per hook, and `forge segments` to cut gameplay with PySceneDetect.
+- **Playables and licences**: `forge playable check|pack` against each network's published rules with a headless browser run, and a model licence registry that refuses non-commercial weights before any call.
+- **A GPU worker on the LAN**: Wan 2.1 first-last-frame and Wan 2.2 TI2V-5B through ComfyUI, with health, VRAM and model checks, resume by prompt id and an explicit cloud fallback (mock-tested; not yet run on a GPU).
 - **Runs on Windows 10/11, macOS (Apple Silicon) and Linux**: one-line installers that need no admin rights, a pinned ffmpeg, RapidOCR where Apple Vision is missing, and CI that installs the built wheel the way a user would on each OS, then runs the demo in a folder named `Çalışma Ş/İğ`.
 - 190 tests (about 40 s), run on Windows, macOS and Ubuntu with Python 3.11, 3.12 and 3.13; any text I/O that depends on the locale's encoding fails them. `forge demo` takes about 10 s on an M4 Mac.
 
@@ -223,6 +228,60 @@ The provider uploads the frame (resized to a ~1 MP SDXL canvas) and the mask to 
 
 Verified on 10 Nov 2026 on an Apple Silicon Mac (M4, 24 GB) with `sd_xl_base_1.0.safetensors`: a masked edit of a 360×640 demo frame on a 768×1344 canvas, 28 steps, returned an image in 176 s from a cold start (167 s for a second run). The plumbing works; the base checkpoint did not draw a recognizable hand on the abstract test frame, so real edits want an inpainting checkpoint.
 
+## Hook video on a ComfyUI GPU worker (Wan 2.1 FLF2V / Wan 2.2 TI2V-5B)
+
+**Not yet run on a GPU.** Everything below is tested against a mocked ComfyUI server (a real `http.server` that answers `/system_stats`, `/object_info`, `/models`, `/upload/image`, `/prompt`, `/history`, `/queue` and `/view` and renders a clip from the uploaded frames); the first real run will be on the studio's Windows NVIDIA desktop.
+
+```yaml
+video_provider: comfyui              # the hook video goes to the worker; image edit, music and judge keep `providers`
+comfyui_video:
+  workflow: wan21_flf2v              # first frame = edited hook frame, last frame = the real gameplay frame
+  # workflow: wan22_ti2v_5b          # 8 GB cards: image-to-video, no last frame (lands via crossfade + patches)
+  diffusion_model: wan2.1_flf2v_720p_14B_fp8_e4m3fn.safetensors   # file names are parameters
+  steps: 20
+  cloud_fallback: false              # true: use models.video (Veo, paid, budget-guarded) if the worker is not ready
+```
+
+- **The same landing recipe as Veo.** Wan 2.1 has an official first-last-frame model, so [`wan21_flf2v.json`](creative_forge/data/comfyui/wan21_flf2v.json) (`WanFirstLastFrameToVideo`) takes the edited hook frame as its first frame and the real gameplay frame as its last. [`wan22_ti2v_5b.json`](creative_forge/data/comfyui/wan22_ti2v_5b.json) (`Wan22ImageToVideoLatent`) has no last-frame input. Both end in ComfyUI's native `CreateVideo` + `SaveVideo`; frame counts are 4k + 1 at the workflow's fps (Wan 2.1: 16, Wan 2.2: 24). The clip then goes through the same trim → patches → 60 fps mci → crossfade path, and `hook_landing`, `seam` and `cadence` judge it as they judge Veo.
+- **Routing, never silent.** Before the run, the worker must answer `/system_stats`, list every node class and input name the workflow uses in `/object_info`, and have every model file in `/models/<folder>`. If not, the run stops with the list, unless `cloud_fallback: true`, in which case the cloud model runs with the budget reserved first. `cost_ledger.json` records which one ran and why (`routing`).
+- **Resume by `prompt_id`.** The id is saved the moment the worker accepts the job (the same pending file as Veo's operation name). A rerun after a crash or a timeout waits for that prompt (reporting its queue position) instead of queueing it again; if the worker restarted and lost it, it is queued again, which costs time, not money. Ctrl-C sends `/interrupt`.
+- **Worker on the LAN.** `CREATIVE_FORGE_COMFYUI_URL=http://192.168.1.20:8188`; connect and read timeouts; uploads go to ComfyUI's temp folder. ComfyUI itself has **no authentication** (its routes, `/userdata` write and delete included, are open to whoever reaches the port), so if you put a reverse proxy in front of it, `CREATIVE_FORGE_COMFYUI_TOKEN` is sent as `Authorization: Bearer …` (`CREATIVE_FORGE_COMFYUI_AUTH_HEADER` changes the header) and never printed.
+- **`forge comfy check`** (or `--spec spec.yaml`, or `forge run --dry-run`) prints the worker's ComfyUI version, GPU and VRAM with what the sources say fits that VRAM, missing node classes, inputs a node does not declare on that ComfyUI version, and missing model files with their Hugging Face download URL. `forge doctor` shows the VRAM too.
+- Local calls are free and have no list price; the cache key holds the workflow's hash, the model files, size, fps, sampler settings and seed.
+
+**What fits which card** (only figures stated by official sources; the rest must be measured):
+
+| VRAM | Workflow | Source |
+|---|---|---|
+| 8 GB | `wan22_ti2v_5b` | ComfyUI docs: TI2V-5B "should fit well on 8GB vram with the ComfyUI native offloading" (docs.comfy.org/tutorials/video/wan/wan2_2) |
+| 12–16 GB | `wan22_ti2v_5b`; `wan21_flf2v` with the fp8 file is **unverified** at this size | — |
+| 24 GB | `wan21_flf2v` (fp8, or fp16 with ComfyUI's offloading) | Wan's own CLI: the 14B models need 80 GB without offloading, or `--offload_model --convert_model_dtype --t5_cpu`; the Wan 2.2 README states 24 GB (RTX 4090) for TI2V-5B in that CLI |
+
+Wan 2.1 FLF2V is 720P only and was trained mainly on Chinese text; its README recommends Chinese prompts. The sampler defaults (FLF2V: 20 steps, cfg 5; TI2V-5B: 30 steps, cfg 5; shift 8, `uni_pc`/`simple`) are starting points, not measured values.
+
+### Setting up the Windows NVIDIA desktop as the worker
+
+1. Install **ComfyUI portable for NVIDIA**: download `ComfyUI_windows_portable_nvidia.7z` from the latest release at https://github.com/Comfy-Org/ComfyUI/releases, extract it with 7-Zip to a short path such as `C:\ComfyUI`, and run `update\update_comfyui.bat` once (the Wan nodes are native in current releases). ComfyUI is GPL-3.0; it runs as a separate program and does not cover the media it generates.
+2. Put the model files (Apache-2.0: [Wan-AI/Wan2.1-FLF2V-14B-720P](https://huggingface.co/Wan-AI/Wan2.1-FLF2V-14B-720P), [Wan-AI/Wan2.2-TI2V-5B](https://huggingface.co/Wan-AI/Wan2.2-TI2V-5B); the ComfyUI-ready files come from Comfy-Org's repackaged repositories, also tagged apache-2.0) under `C:\ComfyUI\ComfyUI\models\`:
+
+   | Folder | File | From |
+   |---|---|---|
+   | `diffusion_models` | `wan2.1_flf2v_720p_14B_fp16.safetensors` or `wan2.1_flf2v_720p_14B_fp8_e4m3fn.safetensors` | [Comfy-Org/Wan_2.1_ComfyUI_repackaged](https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/tree/main/split_files/diffusion_models) |
+   | `text_encoders` | `umt5_xxl_fp8_e4m3fn_scaled.safetensors` | [same repo, `split_files/text_encoders`](https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/tree/main/split_files/text_encoders) |
+   | `vae` | `wan_2.1_vae.safetensors` | [same repo, `split_files/vae`](https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/tree/main/split_files/vae) |
+   | `clip_vision` | `clip_vision_h.safetensors` | [same repo, `split_files/clip_vision`](https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/tree/main/split_files/clip_vision) |
+   | `diffusion_models` | `wan2.2_ti2v_5B_fp16.safetensors` (8 GB tier) | [Comfy-Org/Wan_2.2_ComfyUI_Repackaged](https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/tree/main/split_files/diffusion_models) |
+   | `vae` | `wan2.2_vae.safetensors` (8 GB tier) | [same repo, `split_files/vae`](https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/tree/main/split_files/vae) |
+
+3. Start it on the LAN address only: in `run_nvidia_gpu.bat` add `--listen 192.168.1.20 --port 8188` (the box's own LAN IP, not `0.0.0.0`). The research also notes ComfyUI's `--offline` option, which keeps paid partner API nodes from running; add it if `python_embeded\python.exe ComfyUI\main.py --help` lists it.
+4. Allow only the orchestrator through Windows Firewall (PowerShell as administrator; keep the network profile Private):
+   ```powershell
+   New-NetFirewallRule -DisplayName "ComfyUI from the orchestrator" -Direction Inbound -Protocol TCP -LocalPort 8188 -RemoteAddress 192.168.1.10 -Action Allow -Profile Private
+   ```
+   Alternatives: keep ComfyUI on `127.0.0.1` and reach it through an SSH tunnel (`ssh -N -L 8188:127.0.0.1:8188 you@gpu-box` with Windows' OpenSSH server) or a private overlay network, or a reverse proxy with a token (`CREATIVE_FORGE_COMFYUI_TOKEN`).
+5. On the orchestrator (the Mac, or the same Windows machine): `export CREATIVE_FORGE_COMFYUI_URL=http://192.168.1.20:8188` (PowerShell: `$env:CREATIVE_FORGE_COMFYUI_URL = "http://192.168.1.20:8188"`), then `forge comfy check` until it says `ready`, then `forge run spec.yaml --dry-run`.
+6. The first real run is the acceptance test: one concept with `video_provider: comfyui` should pass `hook_landing` and `seam`; note the seconds the ledger records for the video step and the peak VRAM from `nvidia-smi`.
+
 ## Human review gate
 
 ```bash
@@ -391,6 +450,8 @@ The suite also checks `duration` (spec window), `loudness` (−14.3 LUFS ± 1 LU
 
 - Built around one studio's goods-sort puzzle ads. The defaults (end card, layout, judge rubric) reflect that.
 - The performance importers have only been run against fixtures, not live network APIs (see [Performance import](#performance-import)).
+- The ComfyUI Wan video provider has not run on a GPU yet; it is tested against a mocked ComfyUI server only.
+- Playable checks follow the networks' published pages as read on 11 Nov 2026; Liftoff, Moloco and Mintegral's JS API could not be verified, and the browser run cannot reach a CTA that needs a finished level.
 - In this repo the Veo, Gemini Image, Lyria and judge providers are tested against mocked HTTP only. Their request shapes come from the production scripts, except Lyria, which follows Vertex AI's documented `:predict` shape because the October script for it was not kept. Gemini function calling, `text-embedding-005` and the ComfyUI provider were each run for real, as described above.
 - Lint rules are regular expressions. They catch the phrasings behind real defects, not every semantic mistake.
 - OCR: Apple Vision on macOS (compiled on first use with `swiftc`), RapidOCR on Windows and Linux with the `[ocr]` extra; the tesseract fallback is weaker on stylized game fonts. With no backend, the OCR checks report `skip`.
@@ -407,13 +468,15 @@ The production scripts, the model choices, the failure modes and the QA rules co
 ```
 creative_forge/
   spec.py, pricing.py, ledger.py, cache.py, retry.py, config.py, generator.py
-  providers/   base.py (interfaces), vertex.py (REST), comfyui.py (local SDXL), fake.py (ffmpeg)
+  providers/   base.py (interfaces), vertex.py (REST), comfyui.py (client + SDXL), comfyui_video.py (Wan), fake.py
+  perf/        store.py (SQLite), meta.py, applovin.py, csvimport.py, stats.py, report.py, lessons.py, commands.py
+  playable/    rules.py (per-network rules + sources), static.py, dynamic.py + stubs.js (Playwright), pack.py
   stages/      video.py (gameplay, hook, end card, assembly), audio.py (mix, master, mux), export.py
   qa/          media_checks.py, audio_checks.py, seam.py, ocr.py (+ ocr_vision.swift), judge.py, runner.py
   ideate/      library.py (embedders, index), tools.py (function declarations), agent.py (loop)
-  data/        pricing.yaml, library.yaml, comfyui/*.json (workflows)
+  data/        pricing.yaml, library.yaml, model_licenses.yaml, tag_taxonomy.yaml, comfyui/*.json (workflows)
   ui/          app.py (FastAPI), templates/ (Jinja2), static/ (htmx 2.0.11 + its license)
-  pipeline.py, review.py, report.py, lint.py, imaging.py, demo.py, cli.py
+  pipeline.py, review.py, report.py, lint.py, licenses.py, naming.py, tags.py, segments.py, imaging.py, demo.py, cli.py
   setup_ffmpeg.py (pinned builds), doctor.py, paths.py (platformdirs), fsutil.py (Windows-safe renames)
 install.sh, install.ps1   examples/   tests/   docs/ARCHITECTURE.md   .github/workflows/ (ci, release)
 ```

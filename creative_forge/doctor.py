@@ -16,8 +16,6 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-import requests
-
 from creative_forge import __version__, paths
 from creative_forge.config import ENV_COMFYUI_URL, ENV_PROJECT
 from creative_forge.ffmpeg import (
@@ -134,18 +132,24 @@ def _dirs(cwd: Path) -> Item:
 
 
 def _comfyui(url: str) -> Item:
+    from creative_forge.providers.comfyui import ComfyUIClient, ComfyUIError
+    from creative_forge.providers.comfyui_video import vram_note
+
     try:
-        r = requests.get(url.rstrip("/") + "/system_stats", timeout=3)
-        r.raise_for_status()
-        stats = r.json()
-    except (requests.RequestException, ValueError) as e:
-        return Item(
-            "comfyui", WARN, f"{url} not reachable ({type(e).__name__}); only needed for image_provider: comfyui"
-        )
-    system = stats.get("system", {}) if isinstance(stats, dict) else {}
-    devices = [d.get("name", "?") for d in stats.get("devices", [])] if isinstance(stats, dict) else []
-    version = system.get("comfyui_version", "unknown version")
-    return Item("comfyui", OK, f"{url} answers (ComfyUI {version})", {"url": url, "devices": devices})
+        health = ComfyUIClient.from_env(url, connect_timeout_s=3, read_timeout_s=5).health()
+    except (ComfyUIError, ValueError) as e:
+        return Item("comfyui", WARN, f"{url} not ready ({str(e)[:160]}); only needed for ComfyUI steps")
+    devices = [
+        {"name": d.name, "type": d.type, "vram_total_gb": d.vram_total_gb, "vram_free_gb": d.vram_free_gb}
+        for d in health.devices
+    ]
+    gpu = f"; {health.max_vram_gb:g} GB VRAM" if health.max_vram_gb else ""
+    return Item(
+        "comfyui",
+        OK,
+        f"{url} answers (ComfyUI {health.version}{gpu})",
+        {"url": url, "devices": devices, "tier": vram_note(health.max_vram_gb)},
+    )
 
 
 def _adc_path() -> Path:

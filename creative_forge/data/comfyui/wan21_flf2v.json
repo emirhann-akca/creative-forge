@@ -1,0 +1,34 @@
+{
+  "1": {"class_type": "UNETLoader", "inputs": {"unet_name": "$diffusion_model", "weight_dtype": "default"}, "_meta": {"title": "Wan 2.1 FLF2V 14B 720P"}},
+  "2": {"class_type": "CLIPLoader", "inputs": {"clip_name": "$text_encoder", "type": "wan"}, "_meta": {"title": "umt5-xxl text encoder"}},
+  "3": {"class_type": "VAELoader", "inputs": {"vae_name": "$vae"}, "_meta": {"title": "Wan 2.1 VAE"}},
+  "4": {"class_type": "CLIPVisionLoader", "inputs": {"clip_name": "$clip_vision"}, "_meta": {"title": "CLIP vision H"}},
+  "5": {"class_type": "LoadImage", "inputs": {"image": "$first_frame"}, "_meta": {"title": "First frame (the edited hook frame)"}},
+  "6": {"class_type": "LoadImage", "inputs": {"image": "$last_frame"}, "_meta": {"title": "Last frame (the real gameplay frame)"}},
+  "7": {"class_type": "CLIPVisionEncode", "inputs": {"clip_vision": ["4", 0], "image": ["5", 0], "crop": "none"}, "_meta": {"title": "Encode first frame"}},
+  "8": {"class_type": "CLIPVisionEncode", "inputs": {"clip_vision": ["4", 0], "image": ["6", 0], "crop": "none"}, "_meta": {"title": "Encode last frame"}},
+  "9": {"class_type": "CLIPTextEncode", "inputs": {"text": "$prompt", "clip": ["2", 0]}, "_meta": {"title": "Positive"}},
+  "10": {"class_type": "CLIPTextEncode", "inputs": {"text": "$negative_prompt", "clip": ["2", 0]}, "_meta": {"title": "Negative"}},
+  "11": {
+    "class_type": "WanFirstLastFrameToVideo",
+    "inputs": {
+      "positive": ["9", 0], "negative": ["10", 0], "vae": ["3", 0],
+      "clip_vision_start_image": ["7", 0], "clip_vision_end_image": ["8", 0],
+      "start_image": ["5", 0], "end_image": ["6", 0],
+      "width": "$width", "height": "$height", "length": "$length", "batch_size": 1
+    },
+    "_meta": {"title": "Land on the real frame"}
+  },
+  "12": {"class_type": "ModelSamplingSD3", "inputs": {"model": ["1", 0], "shift": "$shift"}, "_meta": {"title": "Shift"}},
+  "13": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": ["12", 0], "positive": ["11", 0], "negative": ["11", 1], "latent_image": ["11", 2],
+      "seed": "$seed", "steps": "$steps", "cfg": "$cfg", "sampler_name": "$sampler", "scheduler": "$scheduler", "denoise": 1.0
+    },
+    "_meta": {"title": "Sampler"}
+  },
+  "14": {"class_type": "VAEDecode", "inputs": {"samples": ["13", 0], "vae": ["3", 0]}, "_meta": {"title": "Decode"}},
+  "15": {"class_type": "CreateVideo", "inputs": {"images": ["14", 0], "fps": "$fps"}, "_meta": {"title": "Frames to video"}},
+  "16": {"class_type": "SaveVideo", "inputs": {"video": ["15", 0], "filename_prefix": "$filename_prefix", "format": "mp4", "codec": "h264"}, "_meta": {"title": "Save (output/creative-forge/)"}}
+}

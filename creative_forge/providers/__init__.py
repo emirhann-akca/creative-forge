@@ -2,20 +2,42 @@
 
 from __future__ import annotations
 
-from creative_forge.config import Settings
+from collections.abc import Callable
+
+from creative_forge.config import ConfigError, Settings
 from creative_forge.providers.base import ProviderSet
-from creative_forge.spec import ComfyUISpec
+from creative_forge.spec import ComfyUISpec, ComfyUIVideoSpec
 
 
 def build_providers(
-    kind: str, settings: Settings, *, image: str | None = None, comfyui: ComfyUISpec | None = None
+    kind: str,
+    settings: Settings,
+    *,
+    image: str | None = None,
+    comfyui: ComfyUISpec | None = None,
+    video: str | None = None,
+    comfyui_video: ComfyUIVideoSpec | None = None,
+    log: Callable[[str], None] | None = None,
 ) -> ProviderSet:
-    """``kind`` picks every provider; ``image="comfyui"`` swaps in the local ComfyUI image edit on top of it."""
+    """``kind`` picks every provider; ``image="comfyui"`` swaps in the local ComfyUI image edit, and
+    ``video="comfyui"`` routes the hook video to a ComfyUI worker (Wan), falling back to ``kind``'s video provider
+    only when ``comfyui_video.cloud_fallback`` is set. The decision is recorded in ``ProviderSet.routing``."""
     providers = _build(kind, settings)
     if image == "comfyui":
         from creative_forge.providers.comfyui import ComfyUIImageEditProvider
 
         providers.image_edit = ComfyUIImageEditProvider(settings.comfyui_url, comfyui or ComfyUISpec())
+    if video == "comfyui":
+        from creative_forge.providers.comfyui import ComfyUIError
+        from creative_forge.providers.comfyui_video import route_video
+
+        try:
+            providers.video, record = route_video(
+                settings.comfyui_url, comfyui_video or ComfyUIVideoSpec(), providers.video, log=log
+            )
+        except ComfyUIError as e:
+            raise ConfigError(str(e)) from None
+        providers.routing.append(record)
     return providers
 
 

@@ -159,7 +159,13 @@ def models_in_use(spec: AdSpec) -> list[ModelUse]:
             uses.append(ModelUse("image_edit", spec.comfyui.checkpoint, "comfyui"))
         else:
             uses.append(ModelUse("image_edit", spec.models.image_edit, real))
-    uses.append(ModelUse("video", spec.models.video, real))
+    if spec.video_provider == "comfyui":
+        for role, name in spec.comfyui_video.model_files().items():
+            uses.append(ModelUse(f"video ({role})", name, "comfyui"))
+        if spec.comfyui_video.cloud_fallback:
+            uses.append(ModelUse("video (cloud fallback)", spec.models.video, real))
+    else:
+        uses.append(ModelUse("video", spec.models.video, real))
     if any(c.music and c.music.prompt for c in spec.concepts):
         uses.append(ModelUse("music", spec.models.music, real))
     if spec.qa.judge_runs:

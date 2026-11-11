@@ -72,7 +72,8 @@ def comfy(tmp_path):
 
 def test_comfyui_reachability_is_optional(comfy):
     up = by_name(run_doctor(comfyui_url=comfy))["comfyui"]
-    assert up.status == OK and "0.3.99" in up.summary and up.details["devices"] == ["mps"]
+    assert up.status == OK and "0.3.99" in up.summary and [d["name"] for d in up.details["devices"]] == ["mps"]
+    assert "no GPU reported" in up.details["tier"]
     down = by_name(run_doctor(comfyui_url="http://127.0.0.1:9"))["comfyui"]
     assert down.status == WARN
     assert not failed([down])  # an unreachable ComfyUI never blocks: only image_provider: comfyui needs it

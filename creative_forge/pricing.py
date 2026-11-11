@@ -134,4 +134,12 @@ def estimate(spec: AdSpec, pricing: Pricing, judge_runs: int | None = None) -> P
 
 def _video_line(spec: AdSpec, pricing: Pricing, who: str, h: HookSpec) -> PlanLine:
     detail = f"{h.samples} x {h.duration_s}s {'with' if h.audio else 'no'} audio"
+    if spec.video_provider == "comfyui":
+        v = spec.comfyui_video
+        model = v.model_files()["diffusion_model"]
+        local = f"local {v.workflow}, {h.samples} x {h.duration_s}s"
+        if v.cloud_fallback:  # upper bound: the worker may be down and the cloud model run instead
+            return PlanLine(who, "hook video", model, f"{local}; Veo fallback allowed (upper bound)",
+                            pricing.video(h.duration_s, h.samples, h.audio))  # fmt: skip
+        return PlanLine(who, "hook video", model, local, 0.0)
     return PlanLine(who, "hook video", spec.models.video, detail, pricing.video(h.duration_s, h.samples, h.audio))

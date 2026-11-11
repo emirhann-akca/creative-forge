@@ -9,7 +9,7 @@
 | `cache.py` | Content-addressed store with atomic entries (written to a temp dir, then `os.replace`) and `pending.json` for long-running operations. |
 | `ledger.py` | `CostLedger` (every call, cached or not) and `BudgetGuard` (reserve before the call, release after). |
 | `generator.py` | The only path to a provider: per-key lock, then cache lookup, budget reservation, call, cache write and ledger entry. |
-| `providers/` | `base.py` interfaces and request types. `vertex.py` is REST over `google-auth` ADC. `comfyui.py` runs the hook image edit on a local ComfyUI server (SDXL workflows in `data/comfyui/`). `fake.py` is offline media built with ffmpeg and Pillow. |
+| `providers/` | `base.py` interfaces and request types (`ProviderSet.routing` records local-vs-cloud decisions). `vertex.py` is REST over `google-auth` ADC. `comfyui.py`: `ComfyUIClient` (timeouts, optional proxy auth header, health with VRAM, `/object_info`, `/models`, `/queue`, uploads, `/view`, `/interrupt`) and the SDXL image edit. `comfyui_video.py`: the Wan video provider (FLF2V and TI2V-5B workflows in `data/comfyui/`, resume by `prompt_id`, requeue of a lost prompt), `check_worker` and `route_video`. `fake.py` is offline media built with ffmpeg and Pillow. |
 | `imaging.py` | Text stripping, programmatic effects (dust, mud, frost, darken), headline and button rendering, end-card frames, disclaimer overlay. |
 | `stages/video.py` | Gameplay segment, hook clip (trim, patches, mci interpolation), end card, crossfaded assembly. |
 | `stages/audio.py` | Mix (padded FX bus, sidechain ducking), master loop, mux. |

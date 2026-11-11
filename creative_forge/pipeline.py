@@ -177,6 +177,7 @@ class Pipeline:
         self.settings = settings or Settings.from_env()
         self.pricing = pricing or Pricing.load()
         self.ledger = CostLedger()
+        self.ledger.routing = list(providers.routing)
         self.guard = BudgetGuard(self.ledger, budget_usd)
         self.jobs = max(1, jobs)
         self.keep_work = keep_work

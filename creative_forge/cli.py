@@ -133,6 +133,20 @@ def cmd_run(a: argparse.Namespace) -> int:
             problem = preflight(settings.comfyui_url, spec.comfyui.checkpoint)
             if problem:
                 problems.append(problem)
+        if spec.video_provider == "comfyui":
+            from creative_forge.providers.comfyui import ComfyUIClient
+            from creative_forge.providers.comfyui_video import check_worker
+
+            rep = check_worker(
+                ComfyUIClient.from_env(settings.comfyui_url),
+                spec.comfyui_video.workflow,
+                spec.comfyui_video.model_files(),
+            )
+            print(rep.text())
+            if not rep.ok and spec.comfyui_video.cloud_fallback:
+                print("note: the worker is not ready; this run would fall back to the cloud video model (paid)")
+            elif not rep.ok:
+                problems += [f"comfyui worker: {x}" for x in rep.problems]
         for i in lint(spec):
             print(f"lint {i.concept}: [{i.rule}] {i.message}")
         for p in problems:
@@ -150,7 +164,16 @@ def cmd_run(a: argparse.Namespace) -> int:
     from creative_forge.report import write_report
 
     try:
-        providers = build_providers(kind, settings, image=spec.image_provider, comfyui=spec.comfyui)
+        providers = build_providers(
+            kind,
+            settings,
+            image=spec.image_provider,
+            comfyui=spec.comfyui,
+            video=spec.video_provider,
+            comfyui_video=spec.comfyui_video,
+        )
+        for r in providers.routing:
+            print(f"routing: {r['kind']} -> {r['provider']} ({r['reason']})")
     except ConfigError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
@@ -397,6 +420,35 @@ def cmd_doctor(a: argparse.Namespace) -> int:
     return 1 if failed(items) else 0
 
 
+def cmd_comfy(a: argparse.Namespace) -> int:
+    from creative_forge.providers.comfyui import ComfyUIClient
+    from creative_forge.providers.comfyui_video import check_worker
+    from creative_forge.spec import ComfyUIVideoSpec
+
+    settings = Settings.from_env()
+    url = a.url or settings.comfyui_url
+    client = ComfyUIClient.from_env(url)
+    if a.spec:
+        spec = _load(a.spec)
+        targets = []
+        if spec.video_provider == "comfyui":
+            targets.append((spec.comfyui_video.workflow, spec.comfyui_video.model_files()))
+        if spec.image_provider == "comfyui":
+            targets.append(("sdxl_inpaint", {"checkpoint": spec.comfyui.checkpoint}))
+        if not targets:
+            print(f"{a.spec} uses no ComfyUI step (video_provider / image_provider)")
+            return 0
+    else:
+        names = ["wan21_flf2v", "wan22_ti2v_5b"] if a.workflow == "all" else [a.workflow]
+        targets = [(w, ComfyUIVideoSpec(workflow=w).model_files()) for w in names]
+    ok = True
+    for workflow, files in targets:
+        rep = check_worker(client, workflow, files)
+        print(rep.text())
+        ok = ok and rep.ok
+    return 0 if ok else 1
+
+
 def cmd_ui(a: argparse.Namespace) -> int:
     from creative_forge.ui.app import serve
 
@@ -511,6 +563,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     add_perf(sub)
     add_playable(sub)
+
+    sc = sub.add_parser("comfy", help="ComfyUI GPU worker: health, VRAM, nodes and model files for a workflow")
+    csub = sc.add_subparsers(dest="comfy_cmd", required=True)
+    cc = csub.add_parser("check", help="what the worker lacks for a workflow (/system_stats, /object_info, /models)")
+    cc.add_argument("--url", help="default: $CREATIVE_FORGE_COMFYUI_URL or http://127.0.0.1:8188")
+    cc.add_argument("--workflow", choices=["wan21_flf2v", "wan22_ti2v_5b", "all"], default="all")
+    cc.add_argument("--spec", help="check what this spec's ComfyUI steps need instead")
+    cc.set_defaults(fn=cmd_comfy)
 
     sui = sub.add_parser("ui", help="local web page: runs, QA reports, players, approve / reject, demo, doctor")
     sui.add_argument("--root", default="out", help="folder searched for runs (default: out)")
