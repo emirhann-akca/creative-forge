@@ -32,4 +32,8 @@ input { font: inherit; padding: 4px 6px; border: 1px solid var(--line); border-r
 button { font: inherit; padding: 6px 14px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; margin: 6px 6px 0 0; }
 button.secondary { background: transparent; color: var(--accent); }
 pre.log { max-height: 320px; overflow: auto; background: var(--card); border: 1px solid var(--line); padding: 8px; font-size: 12px; white-space: pre-wrap; }
+.scroll { overflow-x: auto; }
+.filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+select { font: inherit; padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--fg); }
+.perf table { font-size: 13px; }
 @media (max-width: 640px) { .export { grid-template-columns: 1fr; } }

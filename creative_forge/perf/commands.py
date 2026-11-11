@@ -105,6 +105,32 @@ def cmd_register(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_report(a: argparse.Namespace) -> int:
+    from creative_forge.perf.lessons import write_lessons
+    from creative_forge.perf.report import build_report, text_summary, write_html
+
+    store = _store(a)
+    try:
+        rep = build_report(
+            store,
+            network=a.network,
+            since=a.since,
+            until=a.until,
+            metric=a.metric,
+            min_impressions=a.min_impressions,
+        )
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    print(text_summary(rep))
+    html_path = write_html(rep, Path(a.out))
+    print(f"\nreport: {html_path} (+ {html_path.with_suffix('.json').name})")
+    if a.write_lessons:
+        path, n = write_lessons(rep)
+        print(f"lessons: {n} written to {path}; `forge ideate` retrieves them")
+    return 0
+
+
 def add_parser(sub: argparse._SubParsersAction) -> None:
     sp = sub.add_parser("perf", help="ad performance: import from networks, register creatives, report, lessons")
     psub = sp.add_subparsers(dest="perf_cmd", required=True)
@@ -139,3 +165,16 @@ def add_parser(sub: argparse._SubParsersAction) -> None:
     pr.add_argument("paths", nargs="+")
     db_arg(pr)
     pr.set_defaults(fn=cmd_register)
+
+    rp = psub.add_parser("report", help="per creative and per tag, with intervals; HTML + JSON; lessons for ideate")
+    rp.add_argument("--network", help="only this network (meta, applovin, tiktok, ...)")
+    rp.add_argument("--since", help="first day (YYYY-MM-DD)")
+    rp.add_argument("--until", help="last day (YYYY-MM-DD)")
+    rp.add_argument("--metric", default="ipm", choices=["ipm", "ctr", "hook_rate", "hook_rate_2s", "completion"])
+    rp.add_argument(
+        "--min-impressions", type=float, default=10000, help="no verdict below this many impressions (default 10000)"
+    )
+    rp.add_argument("--out", default="out/perf_report.html")
+    rp.add_argument("--write-lessons", action="store_true", help="write tag winners/losers into the ideate library")
+    db_arg(rp)
+    rp.set_defaults(fn=cmd_report)

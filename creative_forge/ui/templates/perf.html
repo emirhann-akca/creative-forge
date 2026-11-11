@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Performance - creative-forge{% endblock %}
+{% block body %}
+<section>
+  <h1>Creative performance</h1>
+  <form method="get" action="/perf" class="filters">
+    <label>Metric
+      <select name="metric">
+        {% for m in metrics %}<option value="{{ m }}"{% if m == metric %} selected{% endif %}>{{ m }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Minimum impressions for a verdict <input name="min_impressions" value="{{ min_impressions|int }}" inputmode="numeric"></label>
+    <button type="submit" class="secondary">Update</button>
+  </form>
+  {% if rep %}
+  <p class="muted">{{ rep.metric_label }}. Winner or loser only above {{ "{:,.0f}".format(rep.min_impressions) }} impressions on both
+  sides with non-overlapping 95% Wilson intervals; P(better) is the Bayesian probability of beating the rest of the pool.
+  Store: <code>{{ rep.store }}</code>.</p>
+  <div class="perf">{{ tables }}</div>
+  {% else %}
+  <p>No performance store yet at <code>{{ db }}</code>. Import data with <code>forge perf import meta|applovin|csv</code>
+  and register what you published with <code>forge perf register deliver/manifest.json</code>.</p>
+  {% endif %}
+</section>
+{% endblock %}

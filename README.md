@@ -15,6 +15,8 @@ forge plan   examples/ads.yaml              # cost estimate, spec lint and model
 forge run    examples/ads.yaml --budget-usd 15
 forge review out/puzzle-ads                 # approve / reject each export, with a note
 forge publish out/puzzle-ads --to deliver/  # only approved files; refuses on failed QA unless overridden
+forge perf import meta --account act_1 ...  # creative-level metrics from Meta / AppLovin / CSV into SQLite
+forge perf report --write-lessons           # IPM, CTR, CPI, hook rate per creative and tag, with intervals
 forge setup ffmpeg                          # pinned ffmpeg 9.0.2, SHA-256 verified, no admin rights
 forge doctor                                # ffmpeg, OCR, folders, ComfyUI, credentials; exit 1 on a blocker
 ```
@@ -262,6 +264,30 @@ Rows go into one SQLite file (`perf.sqlite` in the user data folder, `--db` to m
 Tokens: Meta's goes in an `Authorization: Bearer` header, and the `access_token` Meta puts into its `paging.next` links is removed before the next page is fetched. AppLovin accepts its key only as a URL parameter, and `requests` writes the URL into its exception messages, so transport errors are re-raised with only the exception class and host, outside the `except` block (no chained exception holds the URL), and every log line passes through a redactor. Tests check that neither secret reaches a log line, an exception chain, the terminal or the SQLite file. Retries cover HTTP 429/5xx, Meta's throttling codes (4, 17, 32, 613, 80000–80014) and `Retry-After`; when Meta's `x-fb-ads-insights-throttle` header reports 75 % of a quota used, the next page waits.
 
 **Not run against the live APIs**: no tokens were available. The clients follow the documentation cited in the module docstrings (read on 11 Nov 2026) and are tested against fixtures shaped like those documents (`tests/fixtures/perf/`); AppLovin's pages do not document the JSON envelope, so both `{"results": [...]}` and a bare list are accepted.
+
+## `forge perf report`: winners only with enough data
+
+```bash
+forge perf report --network meta --metric ipm --min-impressions 10000 --write-lessons
+#   out/perf_report.html + .json; `forge ui` has the same tables under "Performance"
+```
+
+Per network (audiences and even metric definitions differ, so creatives are never compared across networks), per creative and per tag value:
+
+| Column | Definition |
+|---|---|
+| IPM | installs / impressions × 1000 |
+| CTR | clicks / impressions |
+| CPI | spend / installs |
+| hook rate | 3-second views / impressions. Meta labels `video_view` "3-Second Video Views"; dividing by impressions is an industry convention, not a Meta definition |
+| hook rate (2 s) | TikTok's 2-second views / impressions, a separate column |
+| completion | 100 % views / impressions |
+
+A rate's denominator counts only impressions from rows that report its numerator (AppLovin reports no 3-second views, so it does not dilute Meta's hook rate). AppLovin asset rows are left out of the totals because their creative set already counts those impressions.
+
+**Verdicts.** Each creative is compared with the rest of its network, each tag value with the other values of the same dimension (a creative tagged `emotion: [calm, humor]` counts in both groups). A row is a `winner` or `loser` only when both sides have at least `--min-impressions` (default 10,000) and their 95 % Wilson intervals do not overlap; otherwise it is `insufficient data` or `no clear difference`, whatever the point estimate. The table also gives P(better than the rest) from Beta posteriors with uniform priors (fixed-seed Monte Carlo, so reports reproduce). In the test fixture the creative with the highest IPM (30 on 600 impressions) is reported as `insufficient data`.
+
+**Lessons.** `--write-lessons` turns every tag value with a verdict into a lesson in `<data dir>/library/perf_lessons.yaml`: network, dates, metric with its interval, sample sizes, the comparison group and P(better). `forge ideate` loads that file next to the bundled library, so `search_creative_library` returns it; a test checks that "which hook type wins on installs" retrieves the fixture's winning `hook_type=fail-state` lesson first. A new report replaces the lessons of the same network and metric.
 
 ## `forge ideate`: concepts from a tool-calling model
 

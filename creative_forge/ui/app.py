@@ -6,6 +6,7 @@
   file's SHA-256 and ``forge publish`` gates on it exactly as before.
 * ``forge demo`` in the background, with its log.
 * ``forge doctor``.
+* Creative performance from ``forge perf`` (per creative and per tag), read from the local store.
 
 Binds 127.0.0.1 unless ``--host`` says otherwise. Requests whose ``Host`` header is not a loopback name are refused
 (DNS rebinding), and every state-changing request must carry the per-process token that the pages embed, so another
@@ -162,6 +163,7 @@ def create_app(
     allowed_hosts: frozenset[str] | None = LOOPBACK,
     demo_cmd: list[str] | None = None,
     demo_out: Path | None = None,
+    perf_db: Path | None = None,
 ) -> FastAPI:
     root = Path(root).resolve()
     if (root / "report.json").is_file():  # `--root out/demo` names a run itself: list it from its parent
@@ -250,6 +252,32 @@ def create_app(
     @app.get("/demo/status", response_class=HTMLResponse)
     def demo_status(request: Request) -> HTMLResponse:
         return page(request, "_demo.html", demo_rid=demo_rid())
+
+    @app.get("/perf", response_class=HTMLResponse)
+    def perf_page(request: Request, metric: str = "ipm", min_impressions: float = 10000) -> HTMLResponse:
+        from markupsafe import Markup
+
+        from creative_forge.perf.report import METRICS, build_report, render_tables
+        from creative_forge.perf.store import PerfStore, default_db
+
+        db = Path(perf_db or default_db())
+        rep, tables = None, Markup("")
+        if db.is_file():  # read only: the page never creates a store
+            try:
+                rep = build_report(PerfStore(db), metric=metric, min_impressions=max(0.0, min_impressions))
+            except ValueError as e:
+                raise HTTPException(422, str(e)) from e
+            tables = Markup(render_tables(rep))
+        return page(
+            request,
+            "perf.html",
+            rep=rep,
+            tables=tables,
+            db=db,
+            metric=metric,
+            metrics=list(METRICS),
+            min_impressions=min_impressions,
+        )
 
     @app.get("/doctor", response_class=HTMLResponse)
     def doctor_page(request: Request, partial: bool = False) -> HTMLResponse:

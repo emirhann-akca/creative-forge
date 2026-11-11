@@ -25,7 +25,7 @@ import yaml
 @dataclass(frozen=True)
 class Entry:
     id: str
-    kind: str  # "lesson" (real production defect) or "past_concept" (synthetic example unless marked otherwise)
+    kind: str  # "lesson" (production defect), "perf_lesson" (from imported ad data) or "past_concept"
     title: str
     text: str
     synthetic: bool = False
@@ -35,17 +35,30 @@ class Entry:
         return f"{self.title}. {self.text}"
 
 
-def load_library(path: Path | None = None) -> list[Entry]:
+def _entries(text: str, lesson_kind: str = "lesson") -> list[Entry]:
+    d = yaml.safe_load(text) or {}
+    return [
+        Entry(e["id"], kind, e["title"], " ".join(e["text"].split()), bool(e.get("synthetic", False)))
+        for key, kind in (("lessons", lesson_kind), ("past_concepts", "past_concept"))
+        for e in d.get(key, [])
+    ]
+
+
+def load_library(path: Path | None = None, *, perf_lessons: bool = True) -> list[Entry]:
+    """The bundled library (or ``path``), plus the lessons ``forge perf report --write-lessons`` derived from real ad
+    performance (kind ``perf_lesson``), when that file exists."""
     if path is None:
         text = resources.files("creative_forge.data").joinpath("library.yaml").read_text(encoding="utf-8")
     else:
         text = Path(path).read_text(encoding="utf-8")
-    d = yaml.safe_load(text)
-    return [
-        Entry(e["id"], kind, e["title"], " ".join(e["text"].split()), bool(e.get("synthetic", False)))
-        for key, kind in (("lessons", "lesson"), ("past_concepts", "past_concept"))
-        for e in d.get(key, [])
-    ]
+    entries = _entries(text)
+    if perf_lessons:
+        from creative_forge.perf.lessons import lessons_path
+
+        extra = lessons_path()
+        if extra.is_file():
+            entries += _entries(extra.read_text(encoding="utf-8"), "perf_lesson")
+    return entries
 
 
 class Embedder(Protocol):
