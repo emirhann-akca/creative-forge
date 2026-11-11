@@ -507,8 +507,10 @@ def build_parser() -> argparse.ArgumentParser:
     sg.set_defaults(fn=cmd_segments)
 
     from creative_forge.perf.commands import add_parser as add_perf
+    from creative_forge.playable.commands import add_parser as add_playable
 
     add_perf(sub)
+    add_playable(sub)
 
     sui = sub.add_parser("ui", help="local web page: runs, QA reports, players, approve / reject, demo, doctor")
     sui.add_argument("--root", default="out", help="folder searched for runs (default: out)")

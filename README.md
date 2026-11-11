@@ -13,6 +13,7 @@ forge ui                                    # local web page: runs, QA reports, 
 forge ideate --game "..." --clips a.mp4     # draft concepts with a tool-calling LLM + lesson retrieval
 forge plan   examples/ads.yaml              # cost estimate, spec lint and model licences, no calls
 forge segments capture.mp4                  # suggest gameplay segment in/out points (PySceneDetect)
+forge playable check game.html --network unity --network meta   # per-network rules + headless browser run
 forge run    examples/ads.yaml --budget-usd 15
 forge review out/puzzle-ads                 # approve / reject each export, with a note
 forge publish out/puzzle-ads --to deliver/  # only approved files; refuses on failed QA unless overridden
@@ -329,6 +330,33 @@ A rate's denominator counts only impressions from rows that report its numerator
 **Verdicts.** Each creative is compared with the rest of its network, each tag value with the other values of the same dimension (a creative tagged `emotion: [calm, humor]` counts in both groups). A row is a `winner` or `loser` only when both sides have at least `--min-impressions` (default 10,000) and their 95 % Wilson intervals do not overlap; otherwise it is `insufficient data` or `no clear difference`, whatever the point estimate. The table also gives P(better than the rest) from Beta posteriors with uniform priors (fixed-seed Monte Carlo, so reports reproduce). In the test fixture the creative with the highest IPM (30 on 600 impressions) is reported as `insufficient data`.
 
 **Lessons.** `--write-lessons` turns every tag value with a verdict into a lesson in `<data dir>/library/perf_lessons.yaml`: network, dates, metric with its interval, sample sizes, the comparison group and P(better). `forge ideate` loads that file next to the bundled library, so `search_creative_library` returns it; a test checks that "which hook type wins on installs" retrieves the fixture's winning `hook_type=fail-state` lesson first. A new report replaces the lessons of the same network and metric.
+
+## Playable ads: per-network check and packaging
+
+```bash
+forge playable check game.html --network applovin --network unity --network meta   # static + headless browser
+forge playable check build.zip --network google --network tiktok --json report.json
+forge playable pack src/ --network google --cta-adapter                            # inline assets, package, re-check
+```
+
+The networks' rules conflict, so one HTML file cannot pass everywhere. Every rule is data in [`playable/rules.py`](creative_forge/playable/rules.py) with the URL of the page it comes from and the date it was read (11 Nov 2026):
+
+| Network | Packaging and size | MRAID | CTA | Also checked | Source |
+|---|---|---|---|---|---|
+| AppLovin | one HTML, ≤ 5 MB | 2.0, required | `mraid.open(url)` | waits for `ready`; no external calls; first tap never opens the store; silent until the first tap; portrait **and** landscape; WebGL context-loss fallback; store link is not a placeholder | [best practices](https://support.applovin.com/en/app-discovery/creatives/best-practices-and-guidelines) |
+| Unity Ads | one `index.html`, < 5 MB, everything inlined, minified | 3.0, injected by the webview | `mraid.open(url)` | starts after `ready`, listens to `viewableChange`; no XHR or external calls; first tap never opens the store | [playable spec](https://docs.unity.com/en-us/user-acquisition/creatives/specifications/playable) |
+| Meta | one HTML ≤ 2 MB, or a zip ≤ 5 MB with ≤ 100 files | not part of the spec | `FbPlayableAd.onCTAClick()` (missing → rejection) | no JavaScript redirects | [playable ad format](https://developers.facebook.com/docs/app-ads/formats/playable-ad) |
+| Google Ads | zip ≤ 5 MB (5.2 MB on the troubleshooting page), ≤ 512 files, only CSS/GIF/HTML/JPEG/JS/PNG/SVG | — | `exitapi.js` tag + `ExitApi.exit()` | `<meta name="ad.orientation">`; external references only to Google Fonts and Google-hosted libraries; no sound before interaction; self-closing tags | [HTML5 app ads](https://support.google.com/google-ads/answer/9981650), [troubleshooting](https://support.google.com/google-ads/answer/12771973) |
+| TikTok (Pangle) | zip < 5 MB with `index.html` and `config.json` (`playable_orientation` 0/1/2) | **forbidden** | `playable-sdk.js` + `window.openAppStore()` | no HTTP requests; a first frame within 2 s | [TikTok](https://ads.tiktok.com/help/article?aid=12099), [Pangle](https://ads.tiktok.com/help/article/how-to-create-tiktok-pangle-playable-ads) |
+| Mintegral | one HTML file, 5 MB, no fixed size | not verified | not verified (`install()` / `mraid.open`) | renders in portrait or landscape | [asset specs](https://helpcenter.mintegral.com/en/docs/asset-specs) |
+| Liftoff (Vungle), Moloco | not verified: the spec pages answered 403 | | | generic checks only | — |
+| ironSource Ads | **sunset**: direct demand ended 2026-04-30, advertisers moved to Unity Ads | | | `--network ironsource` says so | [sunset notice](https://docs.unity.com/en-us/grow/is-ads/ironsource-ads-sunset) |
+
+A finding is `pass`, `warn`, `fail` or `uncertain`. **`uncertain` is used instead of `fail`** when the network's page could not be read (Liftoff, Moloco, Mintegral's JS API), when a rule's wording leaves room ("no self-closing tags": void elements only?; "5 MB": 10^6 or 2^20 bytes), or when only the code, not the run, shows a possible violation (`mraid` referenced inside feature detection on TikTok; `window.open` in a fallback branch on Meta).
+
+**The browser run** (Playwright, Apache-2.0; `pip install "creative-forge[playable]"`) serves the bundle from a private `http.server` on 127.0.0.1 and loads it in headless Chromium at 360 × 640 with touch, muted, with stubs for `mraid` (fires `ready` and `viewableChange`), `FbPlayableAd`, `ExitApi`, `openAppStore`, `install`, `window.open` and `postMessage('download')` injected before the page's own scripts. Requests to any other origin are recorded and aborted (`exitapi.js` / `playable-sdk.js` get a stub), so nothing reaches the internet. It checks: no uncaught JavaScript error; a non-blank frame within the network's limit; no CTA call before any interaction; the first tap (the centre of the screen) does not open the store; a CTA reached by tapping (CTA-like text first, then a grid) calls the network's API; no external request; no sound started before the first tap; still rendering, without errors, after a turn to landscape. A CTA that needs a finished level is `uncertain` ("not reached"), not a failure. `--browser-channel chrome` drives an installed Google Chrome and downloads nothing; otherwise `python -m playwright install chromium` once. Every rule has a good and a bad synthetic fixture in `tests/test_playable.py`; CI runs them on Windows, macOS and Linux with Playwright's Chromium.
+
+**`forge playable pack`** inlines every local script, stylesheet, image, font and sound (data URIs), then packages for the network: one `.html`; a folder with exactly one `index.html` for Unity; a zip with `index.html` at its root for Google and TikTok, adding `<meta name="ad.orientation">` and the `exitapi.js` tag for Google, `config.json` for TikTok, and dropping a `mraid.js` tag for TikTok. `--cta-adapter` adds `window.forgeCTA(url)`, which calls the target network's exit API, so a source that calls one function packs for all of them. The packed file is checked again; packing never hides a failing rule.
 
 ## `forge ideate`: concepts from a tool-calling model
 
