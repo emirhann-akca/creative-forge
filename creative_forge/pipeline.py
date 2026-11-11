@@ -26,6 +26,8 @@ from creative_forge.ffmpeg import extract_frame, require_tools
 from creative_forge.generator import Generator
 from creative_forge.imaging import disclaimer_overlay, prepare_first_frame, restore_outside
 from creative_forge.ledger import BudgetGuard, CostLedger
+from creative_forge.licenses import check as check_licenses
+from creative_forge.licenses import override_records
 from creative_forge.lint import LintIssue, lint
 from creative_forge.pricing import Plan, Pricing, estimate
 from creative_forge.providers.base import ImageEditRequest, JudgeRequest, MusicRequest, ProviderSet, VideoRequest
@@ -80,6 +82,7 @@ class RunResult:
     lint: list[LintIssue]
     judge_key: dict[str, str] = field(default_factory=dict)
     seconds: float = 0.0
+    licenses: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def status(self) -> Status:
@@ -113,9 +116,12 @@ class Pipeline:
         judge_runs: int | None = None,
         judge_seed: int = 20261018,
         log: Callable[[str], None] = print,
+        license_overrides: dict[str, str] | None = None,
     ) -> None:
         require_tools()
         self.spec = spec
+        self.license_overrides = license_overrides or {}
+        self.licenses = None
         self.settings = settings or Settings.from_env()
         self.pricing = pricing or Pricing.load()
         self.ledger = CostLedger()
@@ -351,6 +357,10 @@ class Pipeline:
         if unknown:  # a typo here used to produce an empty, "successful" run
             raise ValueError(f"--only: no concept with id {', '.join(unknown)} in {self.spec.name}")
         concepts = [c for c in self.spec.concepts if not only or c.id in only]
+        licences = check_licenses(self.spec, self.license_overrides)
+        licences.raise_if_refused()  # before any generation: a refused model is never called
+        self.ledger.license_overrides = override_records(licences)
+        self.licenses = licences
         plan = estimate(self.spec, self.pricing, self.judge_runs)
         issues = lint(self.spec)
         with ThreadPoolExecutor(max_workers=self.jobs) as pool:
@@ -358,5 +368,13 @@ class Pipeline:
         key = self.judge(results)
         self.ledger.write(self.out_dir / "cost_ledger.json")
         return RunResult(
-            self.spec.name, self.out_dir, results, self.ledger, plan, issues, key, round(time.time() - t0, 1)
+            self.spec.name,
+            self.out_dir,
+            results,
+            self.ledger,
+            plan,
+            issues,
+            key,
+            round(time.time() - t0, 1),
+            [f.to_dict() for f in licences.findings],
         )

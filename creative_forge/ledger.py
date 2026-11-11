@@ -37,6 +37,10 @@ class CostLedger:
     def __init__(self) -> None:
         self._entries: list[LedgerEntry] = []
         self._lock = threading.Lock()
+        # Refused model licences a person overrode for this run, with their reason (see licenses.py).
+        self.license_overrides: list[dict] = []
+        # Which provider ran each kind of generation when routing chose between a local worker and the cloud.
+        self.routing: list[dict] = []
 
     def record(self, entry: LedgerEntry) -> None:
         with self._lock:
@@ -59,11 +63,13 @@ class CostLedger:
         return {
             "spent_usd": self.spent,
             "saved_by_cache_usd": self.saved_by_cache,
+            "license_overrides": list(self.license_overrides),
+            "routing": list(self.routing),
             "entries": [asdict(e) for e in self.entries],
         }
 
     def write(self, path: Path) -> None:
-        path.write_text(json.dumps(self.to_dict(), indent=2), encoding="utf-8")
+        path.write_text(json.dumps(self.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 class BudgetGuard:

@@ -282,6 +282,19 @@ class Concept(_Model):
         return v
 
 
+# ISO 3166-1 alpha-2 country codes, or EU / EEA / UK. Model licences with a territory clause are checked against it.
+Region = Annotated[str, Field(pattern=r"^([A-Za-z]{2}|EU|EEA|eu|eea)$")]
+
+
+class Targets(_Model):
+    """Where the ads will run and who runs them; what licence conditions are checked against (``forge plan``)."""
+
+    # Empty means "may serve anywhere": a licence that excludes a territory is then refused.
+    regions: list[Region] = Field(default_factory=list)
+    # Some open-weights licences (LTX) need a paid licence above a revenue cap. None: not declared (warns).
+    annual_revenue_usd: float | None = Field(None, ge=0)
+
+
 class AdSpec(_Model):
     version: Literal[1] = 1
     name: SafeName
@@ -294,6 +307,7 @@ class AdSpec(_Model):
     export: ExportSpec = Field(default_factory=ExportSpec)
     audio: AudioSpec = Field(default_factory=AudioSpec)
     qa: QASpec = Field(default_factory=QASpec)
+    targets: Targets = Field(default_factory=Targets)
     concepts: list[Concept] = Field(min_length=1)
     base_dir: Path = Field(default=Path("."), exclude=True)
 

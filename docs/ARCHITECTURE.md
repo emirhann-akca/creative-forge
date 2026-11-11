@@ -16,6 +16,7 @@
 | `stages/export.py` | 9:16 and 4:5 encodes with a size-aware maxrate. |
 | `qa/` | Checks that return `CheckResult(status, value, threshold, message, details)`. `runner.py` reads the `.forge.json` sidecar. |
 | `lint.py` | Plan-time rules learned in production, checked before any spend. |
+| `licenses.py`, `data/model_licenses.yaml` | Licence registry (code and weights licence, commercial status, conditions, source, date checked) and the guard: `models_in_use(spec)` lists every model a real run would call, `check()` gives each a verdict against `targets:` (`refuse`, `warn`, `ok`, `service`), and `--license-override MODEL=REASON` turns one refusal into an `overridden` entry that the ledger records. `Pipeline.run()` checks again before any generation, so library callers get the same guard as the CLI. |
 | `pipeline.py` | One job per concept in a private temp dir, a thread pool across concepts, then the blind judge. |
 | `report.py` | Self-contained HTML (inline CSS, base64 contact sheets) and a JSON twin. |
 | `review.py` | Human decisions per export (`review.json`, keyed to file SHA-256) and the publish gate with its manifest. |

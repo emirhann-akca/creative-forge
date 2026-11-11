@@ -11,7 +11,7 @@ Spec-driven pipeline for mobile game video ads with an AI-generated hook and rea
 forge demo                                  # whole pipeline offline: fake providers, synthetic gameplay
 forge ui                                    # local web page: runs, QA reports, players, approve / reject
 forge ideate --game "..." --clips a.mp4     # draft concepts with a tool-calling LLM + lesson retrieval
-forge plan   examples/ads.yaml              # cost estimate + spec lint, no calls
+forge plan   examples/ads.yaml              # cost estimate, spec lint and model licences, no calls
 forge run    examples/ads.yaml --budget-usd 15
 forge review out/puzzle-ads                 # approve / reject each export, with a note
 forge publish out/puzzle-ads --to deliver/  # only approved files; refuses on failed QA unless overridden
@@ -171,6 +171,26 @@ forge run examples/ads.yaml --budget-usd 15
 ```
 
 Model IDs live in the spec (`models:`) and prices in [`creative_forge/data/pricing.yaml`](creative_forge/data/pricing.yaml) (`as_of: 2026-10`). Check both against Google Cloud before a paid run, and override prices with `--pricing pricing.local.yaml`. The judge has no recorded price, so under a budget it is refused until you add one.
+
+## Model licence guard
+
+Several models people reach for are not licensed for paid ads: FLUX.1 Kontext [dev] and FLUX.2 [dev] exclude "revenue-generating activity", MusicGen and F5-TTS weights are CC-BY-NC, XTTS-v2 is under the Coqui Public Model License, the Turkish Piper voice's dataset is CC BY-NC-SA, rembg's default model (BRIA RMBG-2.0) needs a paid agreement, and HunyuanVideo's licence does not apply in the EU, the UK or South Korea. [`data/model_licenses.yaml`](creative_forge/data/model_licenses.yaml) lists every model the tool can call (Vertex AI models, Wan 2.1 FLF2V/I2V, Wan 2.2 TI2V-5B/A14B, Qwen-Image-Edit, SDXL, LTX, FLUX, HunyuanVideo, CogVideoX, MusicGen, ACE-Step, XTTS-v2, F5-TTS, Piper, Kokoro, Chatterbox, rembg models, RapidOCR, faster-whisper) with its code licence, weights licence, commercial status, conditions, source URL and the date the source was read.
+
+`forge plan` and `forge run` resolve every model the spec would call (image edit, video, music, judge; ComfyUI file names included) and print a licence table:
+
+| Verdict | When | Effect |
+|---|---|---|
+| `refuse` | non-commercial weights; a territory clause and `targets.regions` is empty or includes an excluded territory; a revenue cap at or below `targets.annual_revenue_usd` | `forge plan` exits 1, `forge run` exits 4 before building a provider, both naming the licence and its source |
+| `warn` | a conditional licence (LTX's $10M revenue cap, CogVideoX registration, Hunyuan with regions outside its exclusions), or a model the registry does not know | printed, not blocking |
+| `ok` / `service` | open weights that allow it; a hosted API whose service terms apply (not reviewed here) | printed |
+
+```yaml
+targets:
+  regions: [TR, US]               # ISO codes or EU / EEA / UK; empty means "may serve anywhere"
+  annual_revenue_usd: 250000      # checked against revenue caps; undeclared caps warn
+```
+
+A refusal can only be overridden per model and with a reason: `forge run spec.yaml --license-override flux2-dev.safetensors="licensed from BFL, contract 42"`. The reason, the refused licence and its source go into `cost_ledger.json` (`license_overrides`) and `report.json`. `forge licenses` lists the registry; `forge licenses <model>` looks one up. The registry records what each licence said when it was read; it is not legal advice, and licences change.
 
 ## Local SDXL through ComfyUI
 

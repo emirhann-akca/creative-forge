@@ -1,0 +1,324 @@
+# Licence registry: every model creative-forge can call, and what its licence says about paid ad production.
+#
+# "Commercial ad use" here means producing paid user-acquisition videos or playables for a commercial game, by a
+# for-profit studio far below $10M annual revenue.
+#
+# commercial:
+#   yes          open weights whose licence allows that use (Apache-2.0, MIT, OpenRAIL++-M)
+#   no           non-commercial weights: `forge plan` and `forge run` refuse the spec
+#   conditional  allowed under a condition (revenue cap, territory, registration); see `conditions`
+#   service      a hosted API with no weights: use is governed by the provider's service terms that the account
+#                holder accepted, not by a weights licence. Not reviewed here.
+#
+# conditions (evaluated against the spec's `targets:` section):
+#   revenue_cap   {max_annual_revenue_usd}: warn below the cap or when revenue is not declared, refuse at or above
+#   territory     {excluded: [EU, UK, KR]}: refuse when targets.regions is empty (= may serve anywhere) or includes an
+#                 excluded territory; warn otherwise
+#   registration  {text}: warn
+#
+# match: lowercase globs tested against the model id or file name as written in the spec (Vertex model id, ComfyUI
+# checkpoint or diffusion-model file name). The first entry that matches wins, so specific entries come first.
+#
+# Sources: the 2026-11-11 research report (sections 3.1-3.3), which read each Hugging Face model card's licence
+# field and, where the card said "other", the licence text. `checked` is the date the source was read.
+as_of: "2026-11-11"
+models:
+  # ---------------------------------------------------------------------------------------- hosted APIs (Vertex AI)
+  - id: veo-3.1
+    kind: video
+    match: ["veo-*"]
+    code_license: null
+    weights_license: null
+    commercial: service
+    note: Hosted Vertex AI model; the Google Cloud terms the project accepted apply. No weights licence.
+    source: https://cloud.google.com/terms/service-terms
+    checked: null
+  - id: gemini-image
+    kind: image_edit
+    match: ["gemini-*-image*"]
+    code_license: null
+    weights_license: null
+    commercial: service
+    note: Hosted Vertex AI model; the Google Cloud terms the project accepted apply. No weights licence.
+    source: https://cloud.google.com/terms/service-terms
+    checked: null
+  - id: lyria
+    kind: music
+    match: ["lyria-*"]
+    code_license: null
+    weights_license: null
+    commercial: service
+    note: Hosted Vertex AI model; the Google Cloud terms the project accepted apply. No weights licence.
+    source: https://cloud.google.com/terms/service-terms
+    checked: null
+  - id: gemini
+    kind: judge
+    match: ["gemini-*", "text-embedding-*"]
+    code_license: null
+    weights_license: null
+    commercial: service
+    note: Hosted Vertex AI model (judge, ideation, embeddings); does not produce ad media.
+    source: https://cloud.google.com/terms/service-terms
+    checked: null
+
+  # ----------------------------------------------------------------------------------------------- video, open weights
+  - id: wan2.1-flf2v-14b-720p
+    kind: video
+    match: ["wan2.1_flf2v_*", "wan2.1-flf2v-*", "wan-ai/wan2.1-flf2v-*"]
+    code_license: Apache-2.0
+    weights_license: apache-2.0
+    commercial: "yes"
+    note: First-last-frame model; the README recommends Chinese prompts (trained mainly on Chinese text). 720P only.
+    source: https://huggingface.co/Wan-AI/Wan2.1-FLF2V-14B-720P
+    checked: "2026-11-11"
+  - id: wan2.1-i2v-14b
+    kind: video
+    match: ["wan2.1_i2v_*", "wan2.1-i2v-*", "wan-ai/wan2.1-i2v-*"]
+    code_license: Apache-2.0
+    weights_license: apache-2.0
+    commercial: "yes"
+    source: https://huggingface.co/Wan-AI/Wan2.1-I2V-14B-480P
+    checked: "2026-11-11"
+  - id: wan2.2-ti2v-5b
+    kind: video
+    match: ["wan2.2_ti2v_5b*", "wan2.2-ti2v-5b*", "wan-ai/wan2.2-ti2v-5b"]
+    code_license: Apache-2.0
+    weights_license: apache-2.0
+    commercial: "yes"
+    note: ComfyUI's docs say it "should fit well on 8GB vram with the ComfyUI native offloading".
+    source: https://huggingface.co/Wan-AI/Wan2.2-TI2V-5B
+    checked: "2026-11-11"
+  - id: wan2.2-a14b
+    kind: video
+    match: ["wan2.2_i2v_*", "wan2.2_t2v_*", "wan2.2-i2v-a14b*", "wan-ai/wan2.2-i2v-a14b"]
+    code_license: Apache-2.0
+    weights_license: apache-2.0
+    commercial: "yes"
+    source: https://huggingface.co/Wan-AI/Wan2.2-I2V-A14B
+    checked: "2026-11-11"
+  - id: wan-support-files
+    kind: video
+    match: ["umt5_xxl_*", "wan_2.1_vae*", "wan2.2_vae*", "clip_vision_h*"]
+    code_license: Apache-2.0
+    weights_license: apache-2.0
+    commercial: "yes"
+    note: Text encoder, VAE and CLIP vision files from Comfy-Org's repackaged Wan repositories (tagged apache-2.0).
+    source: https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged
+    checked: "2026-11-11"
+  - id: ltx-2
+    kind: video
+    match: ["ltx-2*", "ltx2*", "lightricks/ltx-2*"]
+    code_license: Apache-2.0
+    weights_license: LTX-2 Community License
+    commercial: conditional
+    conditions:
+      - {type: revenue_cap, max_annual_revenue_usd: 10000000}
+    note: A paid licence is needed at $10M annual revenue or more. The Gemma 3 text encoder stays under Google's terms.
+    source: https://github.com/Lightricks/LTX-2/blob/main/LICENSE-2
+    checked: "2026-11-11"
+  - id: ltx-video-0.9
+    kind: video
+    match: ["ltx-video*", "ltxv-*", "ltxv_*", "lightricks/ltx-video*"]
+    code_license: Apache-2.0
+    weights_license: LTX-Video Open Weights License 0.X
+    commercial: conditional
+    conditions:
+      - {type: revenue_cap, max_annual_revenue_usd: 10000000}
+    note: Free unless annual revenue is $10M or more.
+    source: https://huggingface.co/Lightricks/LTX-Video/blob/main/LTX-Video-Open-Weights-License-0.X.txt
+    checked: "2026-11-11"
+  - id: hunyuanvideo
+    kind: video
+    match: ["hunyuan_video*", "hunyuanvideo*", "hunyuan-video*", "tencent/hunyuanvideo*"]
+    code_license: Tencent Hunyuan Community License
+    weights_license: tencent-hunyuan-community
+    commercial: conditional
+    conditions:
+      - {type: territory, excluded: [EU, UK, KR]}
+    note: 'The licence "DOES NOT APPLY IN THE EUROPEAN UNION, UNITED KINGDOM AND SOUTH KOREA", and outputs may not be used or displayed outside the Territory.'
+    source: https://github.com/Tencent-Hunyuan/HunyuanVideo-1.5/blob/master/LICENSE
+    checked: "2026-11-11"
+  - id: cogvideox-5b
+    kind: video
+    match: ["cogvideox*", "thudm/cogvideox*", "zai-org/cogvideox*"]
+    code_license: Apache-2.0
+    weights_license: CogVideoX License
+    commercial: conditional
+    conditions:
+      - {type: registration, text: "commercial use needs registration, and is free only up to 1M monthly visits"}
+    source: https://huggingface.co/THUDM/CogVideoX-5b-I2V/blob/main/LICENSE
+    checked: "2026-11-11"
+
+  # ------------------------------------------------------------------------------------------- image, open weights
+  - id: flux1-kontext-dev
+    kind: image_edit
+    match: ["flux1-kontext-dev*", "flux.1-kontext-dev*", "flux1_kontext_dev*", "black-forest-labs/flux.1-kontext-dev"]
+    code_license: Apache-2.0
+    weights_license: FLUX.1 [dev] Non-Commercial License
+    commercial: "no"
+    note: 'Use "for revenue-generating activity" is not a Non-Commercial Purpose; a paid BFL licence is needed.'
+    source: https://raw.githubusercontent.com/black-forest-labs/flux/main/model_licenses/LICENSE-FLUX1-dev
+    checked: "2026-11-11"
+  - id: flux1-dev
+    kind: image_edit
+    match: ["flux1-dev*", "flux.1-dev*", "flux1_dev*", "black-forest-labs/flux.1-dev"]
+    code_license: Apache-2.0
+    weights_license: FLUX.1 [dev] Non-Commercial License
+    commercial: "no"
+    note: 'Use "for revenue-generating activity" is not a Non-Commercial Purpose.'
+    source: https://raw.githubusercontent.com/black-forest-labs/flux/main/model_licenses/LICENSE-FLUX1-dev
+    checked: "2026-11-11"
+  - id: flux2-dev
+    kind: image_edit
+    match: ["flux2-dev*", "flux2_dev*", "flux.2-dev*", "black-forest-labs/flux.2-dev"]
+    code_license: Apache-2.0
+    weights_license: FLUX [dev] Non-Commercial License v2.0
+    commercial: "no"
+    note: 'Use "for revenue-generating activity" is not a Non-Commercial Purpose.'
+    source: https://raw.githubusercontent.com/black-forest-labs/flux2/main/model_licenses/LICENSE-FLUX-DEV
+    checked: "2026-11-11"
+  - id: flux1-schnell
+    kind: image_edit
+    match: ["flux1-schnell*", "flux.1-schnell*", "black-forest-labs/flux.1-schnell"]
+    code_license: Apache-2.0
+    weights_license: apache-2.0
+    commercial: "yes"
+    source: https://huggingface.co/black-forest-labs/FLUX.1-schnell
+    checked: "2026-11-11"
+  - id: flux2-klein-4b
+    kind: image_edit
+    match: ["flux2-klein-4b*", "flux2_klein_4b*", "flux.2-klein-4b*", "black-forest-labs/flux.2-klein-4b"]
+    code_license: Apache-2.0
+    weights_license: apache-2.0
+    commercial: "yes"
+    source: https://huggingface.co/black-forest-labs/FLUX.2-klein-4B
+    checked: "2026-11-11"
+  - id: qwen-image-edit
+    kind: image_edit
+    match: ["qwen_image_edit*", "qwen-image-edit*", "qwen/qwen-image-edit*", "*nunchaku*qwen-image-edit*"]
+    code_license: Apache-2.0
+    weights_license: apache-2.0
+    commercial: "yes"
+    note: Covers Qwen-Image-Edit, -2509 and -2511, and nunchaku's 4-bit versions (also apache-2.0).
+    source: https://github.com/QwenLM/Qwen-Image
+    checked: "2026-11-11"
+  - id: sdxl-base-1.0
+    kind: image_edit
+    match: ["sd_xl_base_1.0*", "stable-diffusion-xl-base-1.0*", "stabilityai/stable-diffusion-xl-base-1.0", "sd_xl_*inpaint*", "stable-diffusion-xl-1.0-inpainting*"]
+    code_license: MIT
+    weights_license: openrail++ (CreativeML Open RAIL++-M)
+    commercial: "yes"
+    note: Commercial use is allowed; the licence's use-based restrictions apply and must be passed on.
+    source: https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0
+    checked: "2026-11-11"
+
+  # ------------------------------------------------------------------------------- background removal (rembg models)
+  - id: rmbg-2.0
+    kind: background_removal
+    match: ["bria-rmbg*", "rmbg-2.0*", "rmbg_2.0*", "briaai/rmbg-2.0"]
+    code_license: MIT (rembg)
+    weights_license: bria-rmbg-2.0
+    commercial: "no"
+    note: rembg's DEFAULT model; "requires a paid agreement for commercial use". Pin birefnet-general instead.
+    source: https://huggingface.co/briaai/RMBG-2.0
+    checked: "2026-11-11"
+  - id: rmbg-1.4
+    kind: background_removal
+    match: ["rmbg-1.4*", "rmbg_1.4*", "briaai/rmbg-1.4"]
+    code_license: MIT (rembg)
+    weights_license: bria-rmbg-1.4
+    commercial: "no"
+    note: A paid agreement is needed for commercial use.
+    source: https://huggingface.co/briaai/RMBG-1.4
+    checked: "2026-11-11"
+  - id: birefnet
+    kind: background_removal
+    match: ["birefnet*", "zhengpeng7/birefnet*"]
+    code_license: MIT
+    weights_license: mit
+    commercial: "yes"
+    note: The rembg model to pin (`-m birefnet-general`).
+    source: https://huggingface.co/ZhengPeng7/BiRefNet
+    checked: "2026-11-11"
+
+  # ---------------------------------------------------------------------------------------------- music and speech
+  - id: musicgen
+    kind: music
+    match: ["musicgen*", "facebook/musicgen*"]
+    code_license: MIT (audiocraft)
+    weights_license: cc-by-nc-4.0
+    commercial: "no"
+    note: Non-commercial weights.
+    source: https://huggingface.co/facebook/musicgen-small
+    checked: "2026-11-11"
+  - id: ace-step
+    kind: music
+    match: ["ace-step*", "ace_step*", "ace-step/*"]
+    code_license: Apache-2.0
+    weights_license: apache-2.0 (v1-3.5B), mit (1.5)
+    commercial: "yes"
+    source: https://github.com/ace-step/ACE-Step
+    checked: "2026-11-11"
+  - id: xtts-v2
+    kind: tts
+    match: ["xtts*", "coqui/xtts*"]
+    code_license: MPL-2.0 (coqui TTS)
+    weights_license: coqui-public-model-license
+    commercial: "no"
+    note: The Coqui Public Model License does not allow commercial use.
+    source: https://huggingface.co/coqui/XTTS-v2
+    checked: "2026-11-11"
+  - id: f5-tts
+    kind: tts
+    match: ["f5-tts*", "f5tts*", "f5_tts*", "swivid/f5-tts"]
+    code_license: MIT
+    weights_license: cc-by-nc-4.0
+    commercial: "no"
+    note: The code is MIT; the released weights are non-commercial.
+    source: https://huggingface.co/SWivid/F5-TTS
+    checked: "2026-11-11"
+  - id: piper-tr_TR-dfki
+    kind: tts
+    match: ["tr_tr-dfki*", "tr_tr_dfki*", "piper*tr_tr*dfki*"]
+    code_license: GPL-3.0 (piper1-gpl)
+    weights_license: dataset CC BY-NC-SA 4.0
+    commercial: "no"
+    note: The voice's dataset is CC BY-NC-SA 4.0, although the Hugging Face repo is tagged "mit".
+    source: https://huggingface.co/rhasspy/piper-voices/blob/main/tr/tr_TR/dfki/medium/MODEL_CARD
+    checked: "2026-11-11"
+  - id: kokoro-82m
+    kind: tts
+    match: ["kokoro*", "hexgrad/kokoro*"]
+    code_license: Apache-2.0
+    weights_license: apache-2.0
+    commercial: "yes"
+    note: No Turkish voice.
+    source: https://huggingface.co/hexgrad/Kokoro-82M
+    checked: "2026-11-11"
+  - id: chatterbox
+    kind: tts
+    match: ["chatterbox*", "resembleai/chatterbox*"]
+    code_license: MIT
+    weights_license: mit
+    commercial: "yes"
+    note: A Perth watermark is embedded in every output, and the project is "retired research" since August 2026.
+    source: https://github.com/resemble-ai/chatterbox
+    checked: "2026-11-11"
+
+  # ------------------------------------------------------------------------------------------------- analysis (QA)
+  - id: rapidocr-pp-ocr
+    kind: ocr
+    match: ["rapidocr*", "pp-ocr*"]
+    code_license: Apache-2.0
+    weights_license: Apache-2.0 (PaddleOCR models)
+    commercial: "yes"
+    source: https://github.com/RapidAI/RapidOCR
+    checked: "2026-11-11"
+  - id: faster-whisper
+    kind: asr
+    match: ["faster-whisper*", "systran/faster-whisper*", "whisper-large-v3*"]
+    code_license: MIT
+    weights_license: mit
+    commercial: "yes"
+    source: https://github.com/SYSTRAN/faster-whisper
+    checked: "2026-11-11"

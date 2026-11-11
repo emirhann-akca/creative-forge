@@ -101,6 +101,7 @@ def report_dict(rr: RunResult) -> dict[str, Any]:
             "pricing_as_of": rr.plan.pricing.as_of if rr.plan.pricing else None,
         },
         "lint": [i.__dict__ for i in rr.lint],
+        "licenses": rr.licenses,
         "cost": rr.ledger.to_dict(),
         "judge_key": rr.judge_key,
         "concepts": [

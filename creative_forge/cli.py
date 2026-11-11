@@ -1,4 +1,5 @@
-"""``forge`` command line: plan, run, qa, demo, ideate, review, publish, setup, doctor, ui."""
+"""``forge`` command line: plan, run, qa, demo, ideate, review, publish, setup, doctor, ui, licenses, perf,
+segments, playable, comfy."""
 
 from __future__ import annotations
 
@@ -17,6 +18,9 @@ from creative_forge.qa.result import CheckResult, Status, worst
 from creative_forge.spec import AdSpec, load_spec
 
 OCR_CHOICES = ["auto", "vision", "rapidocr", "tesseract", "off"]
+LICENSE_OVERRIDE_HELP = (
+    "run a model whose licence the registry refuses, with the reason written into the cost ledger (repeatable)"
+)
 
 
 def _print_checks(title: str, checks: list[CheckResult]) -> None:
@@ -34,6 +38,25 @@ def _load(path: str) -> AdSpec:
         raise SystemExit(f"spec not found: {path}") from None
 
 
+def _licence_report(spec: AdSpec, a: argparse.Namespace):
+    from creative_forge.licenses import check, parse_overrides
+
+    try:
+        overrides = parse_overrides(getattr(a, "license_override", None))
+    except ValueError as e:
+        raise SystemExit(f"error: {e}") from None
+    report = check(spec, overrides)
+    print("\nmodel licences:")
+    print("  " + report.table().replace("\n", "\n  "))
+    for f in report.refused:
+        print(
+            f"refused: {f.role} model {f.model}: {f.reason} ({f.source}, checked {f.checked}). Nothing is generated; "
+            f"to proceed anyway: --license-override {f.model}='<reason>' (recorded in the cost ledger)",
+            file=sys.stderr,
+        )
+    return report, overrides
+
+
 def cmd_plan(a: argparse.Namespace) -> int:
     spec = _load(a.spec)
     pricing = Pricing.load(a.pricing)
@@ -43,6 +66,29 @@ def cmd_plan(a: argparse.Namespace) -> int:
         print("\nspec lint:")
         for i in issues:
             print(f"  {i.concept}: [{i.rule}] {i.message}")
+    report, _ = _licence_report(spec, a)
+    return 1 if report.refused else 0
+
+
+def cmd_licenses(a: argparse.Namespace) -> int:
+    from creative_forge.licenses import Registry
+
+    reg = Registry.load()
+    if a.model:
+        e = reg.lookup(a.model)
+        if e is None:
+            print(f"{a.model}: not in the licence registry (as of {reg.as_of})")
+            return 1
+        print(f"{a.model} -> {e.id}: commercial={e.commercial}; weights {e.weights_license}; code {e.code_license}")
+        if e.conditions:
+            print(f"  conditions: {list(e.conditions)}")
+        if e.note:
+            print(f"  {e.note}")
+        print(f"  source: {e.source} (checked {e.checked or 'not checked'})")
+        return 0
+    print(f"licence registry as of {reg.as_of} ({len(reg.entries)} entries)")
+    for e in reg.entries:
+        print(f"  {e.id:24} {e.kind:18} {e.commercial:11} {e.weights_license or '-'}  ({e.checked or 'not checked'})")
     return 0
 
 
@@ -52,6 +98,9 @@ def cmd_run(a: argparse.Namespace) -> int:
     settings = Settings.from_env()
     pricing = Pricing.load(a.pricing)
     plan = estimate(spec, pricing, a.judge_runs)
+    licences, overrides = _licence_report(spec, a)
+    if licences.refused:
+        return 4
     if a.dry_run:
         print(plan.table())
         problems = []
@@ -108,6 +157,7 @@ def cmd_run(a: argparse.Namespace) -> int:
         keep_work=a.keep_work,
         ocr=a.ocr,
         judge_runs=a.judge_runs,
+        license_overrides=overrides,
     )
     try:
         rr = pipe.run(only=a.only)
@@ -326,7 +376,12 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("spec")
     sp.add_argument("--pricing", help="pricing YAML overriding the bundled October 2026 table")
     sp.add_argument("--judge-runs", type=int, default=None)
+    sp.add_argument("--license-override", action="append", metavar="MODEL=REASON", help=LICENSE_OVERRIDE_HELP)
     sp.set_defaults(fn=cmd_plan)
+
+    sl = sub.add_parser("licenses", help="the model licence registry: every model the tool can call")
+    sl.add_argument("model", nargs="?", help="look up one model id or file name")
+    sl.set_defaults(fn=cmd_licenses)
 
     sr = sub.add_parser("run", help="render every concept of a spec")
     sr.add_argument("spec")
@@ -339,6 +394,7 @@ def build_parser() -> argparse.ArgumentParser:
     sr.add_argument("--ocr", choices=OCR_CHOICES, default="auto")
     sr.add_argument("--judge-runs", type=int, default=None)
     sr.add_argument("--pricing")
+    sr.add_argument("--license-override", action="append", metavar="MODEL=REASON", help=LICENSE_OVERRIDE_HELP)
     sr.set_defaults(fn=cmd_run)
 
     sq = sub.add_parser("qa", help="run the QA checks on finished videos")
