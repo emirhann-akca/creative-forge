@@ -57,7 +57,8 @@ jobs:
                   "creative_forge/ui/templates/run.html", "creative_forge/qa/ocr_vision.swift",
                   "creative_forge/data/pricing.yaml", "creative_forge/data/model_licenses.yaml",
                   "creative_forge/data/tag_taxonomy.yaml", "creative_forge/ui/templates/perf.html",
-                  "creative_forge/playable/stubs.js"]
+                  "creative_forge/playable/stubs.js", "creative_forge/data/desktop/creative-forge.ico",
+                  "creative_forge/data/desktop/creative-forge.icns", "creative_forge/data/desktop/creative-forge.png"]
           missing = [n for n in need if n not in names]
           if missing:
               print(f"::error title=wheel contents::missing {missing}")
@@ -230,6 +231,41 @@ jobs:
           Write-Output "::notice title=doctor ${{ matrix.os }} job ${{ strategy.job-index }}::$($py.details.platform) | ffmpeg $($ff.details.source): $($ff.details.version) | AAC encoders that open: $($ff.details.aac_encoders -join ' ') | $($ocr.summary)"
           if ($ff.details.source -ne 'managed') { Write-Output "::error title=ffmpeg source::expected the managed build, got $($ff.details.source)"; exit 1 }
           if ($ocr.status -ne 'ok') { Write-Output "::error title=ocr::$($ocr.summary)"; exit 1 }
+      # The installer added the launcher people double-click; run exactly what it points at (the
+      # windowless creative-forge program) with --check: it serves the review UI with the
+      # heartbeat, loads the pages and stops (no window on a runner).
+      - name: Desktop launcher (Start menu / Desktop, ~/Applications, app menu) and its launch
+        shell: pwsh
+        run: |
+          function Fail([string]$msg) { "::error title=desktop launcher (${{ matrix.os }} job ${{ strategy.job-index }})::$msg"; exit 1 }
+          $env:CREATIVE_FORGE_HOME = Join-Path $env:RUNNER_TEMP ('forge app ' + [char]0x00E7 + [char]0x0131)
+          if ($IsWindows) {
+            $shell = New-Object -ComObject WScript.Shell
+            $target = $null
+            foreach ($folder in 'Desktop', 'Programs') {
+              $lnk = Join-Path ([Environment]::GetFolderPath($folder)) 'Creative Forge.lnk'
+              if (-not (Test-Path -LiteralPath $lnk)) { Fail "missing $lnk" }
+              $target = $shell.CreateShortcut($lnk).TargetPath
+              if (-not $target.EndsWith('creative-forge.exe') -or -not (Test-Path -LiteralPath $target)) { Fail "$lnk points at '$target'" }
+            }
+            $p = Start-Process -FilePath $target -ArgumentList '--check' -Wait -PassThru
+            $code = $p.ExitCode
+          } elseif ($IsMacOS) {
+            $app = Join-Path $HOME 'Applications/Creative Forge.app'
+            $target = Join-Path $app 'Contents/MacOS/creative-forge'
+            if (-not (Test-Path -LiteralPath $target)) { Fail "missing $target" }
+            & plutil -lint (Join-Path $app 'Contents/Info.plist'); if ($LASTEXITCODE) { Fail 'Info.plist is not valid' }
+            & $target --check; $code = $LASTEXITCODE
+          } else {
+            $entry = Join-Path $HOME '.local/share/applications/creative-forge.desktop'
+            if (-not (Test-Path -LiteralPath $entry)) { Fail "missing $entry" }
+            $exec = (Select-String -LiteralPath $entry -Pattern '^Exec="(.+)"$').Matches[0].Groups[1].Value
+            & $exec --check; $code = $LASTEXITCODE
+          }
+          $log = Join-Path $env:CREATIVE_FORGE_HOME 'data/app/logs/app.log'
+          if (Test-Path -LiteralPath $log) { Get-Content -LiteralPath $log -Tail 20 }
+          if ($code -ne 0) { Fail "the launcher's --check exited $code" }
+          "::notice title=desktop launcher (${{ matrix.os }} job ${{ strategy.job-index }})::launcher present; it served the review UI with the heartbeat and stopped"
       - name: forge demo, review, publish and ui in a directory with Turkish characters
         shell: pwsh
         run: |

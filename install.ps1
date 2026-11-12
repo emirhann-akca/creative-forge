@@ -15,6 +15,7 @@
 #   FORGE_ARCHIVE_URL     the source archive used when the release wheel is missing (default: the main branch)
 #   FORGE_PYTHON          Python version for the tool environment (default 3.13)
 #   FORGE_NO_MODIFY_PATH  1 = do not add the tool folder to your user PATH
+#   FORGE_NO_SHORTCUT     1 = do not add the "Creative Forge" Desktop and Start menu shortcuts
 #
 # Written for `irm | iex`: ASCII only, everything inside one script block (nothing leaks into your session), and no
 # `exit` (it would close your window). A failure throws; the error is printed and the window stays open.
@@ -161,5 +162,14 @@
     Invoke-Native $forge @('setup', 'ffmpeg')
     Say 'checking the installation'
     Invoke-Native $forge @('doctor')
-    Say 'done. Open a NEW terminal and run:  forge demo   (or: forge ui)'
+    $launcher = $false
+    if ($env:FORGE_NO_SHORTCUT -ne '1') {
+        if ((Invoke-Exe $forge @('app', '--install-shortcut')) -eq 0) { $launcher = $true }
+        else { Say "could not add the Desktop / Start menu shortcut; 'forge app' opens the same window" }
+    }
+    if ($launcher) {
+        Say "done. Open 'Creative Forge' from the Start menu or the Desktop (or, in a NEW terminal: forge app)"
+    } else {
+        Say 'done. Open a NEW terminal and run:  forge demo   (or: forge app)'
+    }
 }

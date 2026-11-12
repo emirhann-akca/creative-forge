@@ -16,6 +16,7 @@
 #   FORGE_ARCHIVE_URL     the source archive used when the release wheel is missing (default: the main branch)
 #   FORGE_PYTHON          Python version for the tool environment (default 3.13)
 #   FORGE_NO_MODIFY_PATH  1 = do not add ~/.local/bin to your shell profile
+#   FORGE_NO_SHORTCUT     1 = do not add ~/Applications/Creative Forge.app (macOS) or the app-menu entry (Linux)
 set -eu
 
 FORGE_VERSION="0.2.0"
@@ -147,7 +148,21 @@ main() {
     say "checking the installation"
     "$forge" doctor || fail "forge doctor found a blocking problem (see above)"
 
-    say "done. Open a NEW terminal and run:  forge demo   (or: forge ui)"
+    launcher=""
+    if [ "${FORGE_NO_SHORTCUT:-0}" != "1" ]; then
+        if "$forge" app --install-shortcut; then
+            launcher=1
+        else
+            say "could not add the app launcher; 'forge app' opens the same window"
+        fi
+    fi
+    if [ -n "$launcher" ] && [ "$(uname -s)" = "Darwin" ]; then
+        say "done. Open 'Creative Forge' from Launchpad, Spotlight or ~/Applications (or run: forge app)"
+    elif [ -n "$launcher" ]; then
+        say "done. Open 'Creative Forge' from your applications menu (or run: forge app)"
+    else
+        say "done. Open a NEW terminal and run:  forge demo   (or: forge app)"
+    fi
     case ":$PATH:" in
         *":$bin:"*) ;;
         *) say "until then, run it as: \"$forge\"" ;;

@@ -578,6 +578,10 @@ def build_parser() -> argparse.ArgumentParser:
     sui.add_argument("--port", type=int, default=None, help="default 8765, or any free port if that is taken")
     sui.add_argument("--no-browser", action="store_true", help="do not open a browser tab")
     sui.set_defaults(fn=cmd_ui)
+
+    from creative_forge.desktop import add_parser as add_app_parser  # forge app: the desktop window
+
+    add_app_parser(sub)
     return p
 
 

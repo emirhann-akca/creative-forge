@@ -55,6 +55,11 @@ dev = ["pytest>=8.0", "ruff>=0.5", "httpx>=0.27", "httpx2>=2.0", "pytest-github-
 [project.scripts]
 forge = "creative_forge.cli:main"
 
+[project.gui-scripts]
+# The desktop app (Desktop / Start menu / Applications icon): the review UI in its own window,
+# no console window on Windows.
+creative-forge = "creative_forge.desktop:gui_main"
+
 [tool.hatch.build.targets.wheel]
 packages = ["creative_forge"]
 

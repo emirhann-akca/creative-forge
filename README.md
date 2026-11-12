@@ -41,7 +41,7 @@ forge comfy check                           # a ComfyUI GPU worker: VRAM, missin
 - **Playables and licences**: `forge playable check|pack` against each network's published rules with a headless browser run, and a model licence registry that refuses non-commercial weights before any call.
 - **A GPU worker on the LAN**: Wan 2.1 first-last-frame and Wan 2.2 TI2V-5B through ComfyUI, with health, VRAM and model checks, resume by prompt id and an explicit cloud fallback (mock-tested; not yet run on a GPU).
 - **Runs on Windows 10/11, macOS (Apple Silicon) and Linux**: one-line installers that need no admin rights, a pinned ffmpeg, RapidOCR where Apple Vision is missing, and CI that installs the built wheel the way a user would on each OS, then runs the demo in a folder named `Çalışma Ş/İğ`.
-- 345 tests (about 1 min 45 s on an M4 Mac, most of it the headless-browser playable runs), run on Windows, macOS and Ubuntu with Python 3.11, 3.12 and 3.13; any text I/O that depends on the locale's encoding fails them. `forge demo` takes about 10 s.
+- 353 tests (about 1 min 45 s on an M4 Mac, most of it the headless-browser playable runs), run on Windows, macOS and Ubuntu with Python 3.11, 3.12 and 3.13; any text I/O that depends on the locale's encoding fails them. `forge demo` takes about 10 s.
 
 ![Demo export frames](docs/img/demo-frames.png)
 
@@ -112,7 +112,10 @@ Each installer works inside your user profile and needs no admin rights and no g
 
 1. downloads [uv](https://github.com/astral-sh/uv) 0.13.7 and checks its SHA-256 against the value written in the script;
 2. installs `creative-forge[ocr]` with `uv tool install` and Python 3.13, which uv downloads if you do not have it. It first tries the release wheel of the installer's version; when no such release exists (HTTP 404) it installs the source archive of the `main` branch (`https://github.com/emirhann-akca/creative-forge/archive/refs/heads/main.zip`), which uv builds locally with the package's own build backend. It prints which source it used. `forge` lands in `~/.local/bin` (Windows: `%USERPROFILE%\.local\bin`), and that folder is added to your PATH for new terminals;
-3. runs `forge setup ffmpeg` and `forge doctor`.
+3. runs `forge setup ffmpeg` and `forge doctor`;
+4. adds a **Creative Forge** launcher: Start menu and Desktop shortcuts on Windows, `~/Applications/Creative Forge.app` on macOS (Launchpad and Spotlight find it), an applications-menu entry on Linux. `FORGE_NO_SHORTCUT=1` skips it; `forge app --install-shortcut` / `--uninstall-shortcut` add or remove it later.
+
+**Open it like an app.** A double-click starts the review UI on `127.0.0.1` and a free port and opens it in a window of its own (Edge, Chrome, Brave or Chromium in app mode: no tabs, no address bar; the default browser otherwise). Runs live in the data folder's `runs` (the page's "Run the demo" button fills it); `forge app --root <folder>` switches folders and the icon remembers it. A second double-click opens a window on the running server instead of starting another; closing the last window stops the server about 20 seconds later (the pages tell it they are leaving), and the log is in the data folder's `app/logs/app.log`. `forge app --check` starts, loads the pages and stops; CI runs it from the installed launcher on Windows, macOS and Linux.
 
 Open a new terminal afterwards. `-ExecutionPolicy Bypass` applies to that one PowerShell process only: Windows clients default to the `Restricted` policy, under which no script runs. To read a script before running it, open the same URL in a browser. `FORGE_SOURCE` (a wheel or a source archive), `FORGE_RELEASE_URL`, `FORGE_ARCHIVE_URL` and `FORGE_PYTHON` override the defaults.
 
@@ -150,6 +153,7 @@ py -3.13 -m venv .venv
 ```bash
 forge demo            # writes out/demo/: 2 concepts x 2 formats + report.html
 forge ui              # opens http://127.0.0.1:8765: the demo run, its report, players, approve / reject
+forge app             # the same UI in its own window (what the desktop icon runs)
 forge ideate --game "goods-sort puzzle" --clips out/demo/inputs/gameplay.mp4 --n 2   # scripted model, offline
 pytest                # from a clone
 ```
