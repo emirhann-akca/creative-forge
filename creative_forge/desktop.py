@@ -195,7 +195,9 @@ class Heartbeat:
             return
         path = scope.get("path", "")
         if path == "/__app/ping":
-            self.last_ping, self.pinged = self.clock(), True
+            # a ping after a goodbye means another window or the next page is there; by order,
+            # not by time (Windows' monotonic clock ticks every ~16 ms)
+            self.last_ping, self.pinged, self.bye_at = self.clock(), True, None
             await self._plain(send, b"ok", b"text/plain")
             return
         if path == "/__app/bye":
@@ -329,7 +331,7 @@ def run(
             window_gone = proc is not None and proc.poll() is not None and beat.pinged
             if window_gone and now - beat.last_ping > PING_EVERY_S * 2:  # the window was closed
                 break
-            left = beat.bye_at is not None and beat.last_ping < beat.bye_at
+            left = beat.bye_at is not None  # a page left and no page has pinged since
             if left and now - beat.bye_at > bye_grace_s:  # the last page left and none came back
                 break
             if now - beat.last_ping > gone_after_s:

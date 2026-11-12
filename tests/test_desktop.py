@@ -59,6 +59,8 @@ def test_heartbeat_adds_its_script_to_full_pages_only():
     assert c.get("/__app/ping").status_code == 200 and beat.pinged and beat.last_ping == 20.0
     now[0] = 30.0
     assert c.post("/__app/bye").status_code == 200 and beat.bye_at == 30.0
+    # a ping in the same clock tick (Windows: ~16 ms) still cancels the goodbye: order decides
+    assert c.get("/__app/ping").status_code == 200 and beat.bye_at is None
 
 
 def test_pick_root_order(tmp_path, monkeypatch):
