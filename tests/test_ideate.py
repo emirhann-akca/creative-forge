@@ -136,7 +136,7 @@ def test_gemini_request_uses_function_calling(tools):
     client = RecordingClient(lambda b: reply)
     run_agent(VertexGeminiChat(client), tools, "x", n=2, max_steps=1)
     url, body = client.posts[0]
-    assert url.endswith("gemini-2.5-flash:generateContent")
+    assert url.endswith("global/models/gemini-3.5-flash-lite:generateContent")
     assert body["toolConfig"] == {"functionCallingConfig": {"mode": "ANY"}}
     names = [d["name"] for d in body["tools"][0]["functionDeclarations"]]
     assert names == [d["name"] for d in DECLARATIONS] and "submit_concepts" in names

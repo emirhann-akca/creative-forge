@@ -512,7 +512,7 @@ def build_parser() -> argparse.ArgumentParser:
     si.add_argument("--out", default="out/ideas.yaml")
     si.add_argument("--name", default="ideas", help="spec name (lowercase, a-z0-9_-)")
     si.add_argument("--llm", choices=["fake", "vertex"], default="fake", help="fake: scripted, offline")
-    si.add_argument("--model", default="gemini-2.5-flash")
+    si.add_argument("--model", default="gemini-3.5-flash-lite", help="Vertex AI Gemini model id")
     si.add_argument("--embedder", choices=["hash", "vertex"], default="hash")
     si.add_argument("--embed-location", default="us-central1")
     si.add_argument("--max-steps", type=int, default=8, choices=range(1, 21), metavar="STEPS", help="1-20")

@@ -25,7 +25,11 @@ dimensions:
   mechanic_shown:
     description: The core mechanic the gameplay part shows.
     multi: true
-    values: [goods-sort, merge, match-3, tile-match, block-puzzle, physics, idle, runner, hidden-object, word, other]
+    # color-sort (ball/water/colour sorting), screw-pin (screws, bolts, pull the pin) and jam (bus, car, parking or
+    # colour-block jams) are separate subgenres in the market (Naavik x Sensor Tower, Feb 2026); studio-pulse's
+    # market radar tags them, so they are their own values here instead of `other`.
+    values: [goods-sort, merge, match-3, tile-match, block-puzzle, physics, idle, runner, hidden-object, word,
+             color-sort, screw-pin, jam, other]
   emotion:
     description: What the viewer should feel.
     multi: true

@@ -48,7 +48,11 @@ class ChatModel(ABC):
 
 
 class VertexGeminiChat(ChatModel):
-    def __init__(self, client, model: str = "gemini-2.5-flash", location: str = "global", temperature: float = 0.4):
+    # gemini-2.5-* retired on Vertex AI on 20 Oct 2026 (model-versions page). gemini-3.5-flash-lite on the global
+    # endpoint answered studio-pulse's market radar on 12 Nov 2026; change it with `forge ideate --model`.
+    def __init__(
+        self, client, model: str = "gemini-3.5-flash-lite", location: str = "global", temperature: float = 0.4
+    ):
         super().__init__()
         self.client = client
         self.model = model

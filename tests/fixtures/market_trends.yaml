@@ -1,0 +1,45 @@
+# A synthetic market_trends.yaml in the studio-pulse/market_trends/v1 schema (fictional games, ids and numbers).
+# studio-pulse's market radar (`pulse radar run`) writes the real file into <data dir>/library/.
+version: 1
+schema: studio-pulse/market_trends/v1
+generated_at: '2026-11-12T09:30:00+00:00'
+as_of: '2026-11-12'
+source: studio-pulse market radar (Apple charts, iTunes Lookup, Google Play details)
+countries: [us, tr]
+lessons:
+- id: MT-2026-11-12-jam
+  title: 'Market radar 2026-11-12: jam is rising (2 new games)'
+  text: 'Market signal from public store charts on 2026-11-12: new games with jam as the primary mechanic are rising:
+    Bus Bay Jam (Example Studio; radar class breakout; charts US topfreeapplications:6014 #12 [observed]; age 9 days
+    [observed]; Google Play 100,000+ installs [store-reported]; store text says "tap the buses in colour order");
+    Lot Shuffle (Sample Games; radar class watch; charts TR topfreeapplications:6014 #40 [observed]; age 20 days
+    [observed]). Twists seen in their store text: move-limit. Themes: vehicles. Suggested hooks (inference, not data):
+    near-miss, challenge, fail-state. Use this as a direction for a creative test, not as proof of performance.'
+  kind: market_trend
+  mechanic: jam
+  mechanic_shown: jam
+  gamerefinery: Other puzzle
+  themes: [vehicles]
+  twists: [move-limit]
+  hooks: [near-miss, challenge, fail-state]
+  apps:
+  - {app_key: 'apple:1000000001', name: Bus Bay Jam, class: breakout}
+  - {app_key: 'apple:1000000002', name: Lot Shuffle, class: watch}
+  evidence: ['rss:us:topfreeapplications:6014#12@2026-11-12', 'rss:tr:topfreeapplications:6014#40@2026-11-12']
+  signal: daily_breakout
+  basis: {ranks: observed, ratings: observed, installs: store_reported, hooks: inference}
+- id: MT-2026-11-09-us-color-sort-weekly
+  title: 'Market radar week 2026-11-09: color-sort share up in US'
+  text: Weekly chart share of color-sort games in US top free games rose to 7.1% from a 4-week mean of 3.0% (z=4.2, 5
+    games) [observed]. Suggested hooks (inference) satisfying-clean, near-miss, challenge.
+  kind: market_trend
+  mechanic: color-sort
+  mechanic_shown: color-sort
+  gamerefinery: Other puzzle
+  themes: []
+  twists: []
+  hooks: [satisfying-clean, near-miss, challenge]
+  apps: []
+  evidence: ['trend:us:color-sort@2026-11-09']
+  signal: weekly_trend
+  basis: {share: observed, hooks: inference}

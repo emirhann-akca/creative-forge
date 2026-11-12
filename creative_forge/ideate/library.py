@@ -25,7 +25,7 @@ import yaml
 @dataclass(frozen=True)
 class Entry:
     id: str
-    kind: str  # "lesson" (production defect), "perf_lesson" (from imported ad data) or "past_concept"
+    kind: str  # "lesson" (production defect), "perf_lesson" (imported ad data), "market_trend" or "past_concept"
     title: str
     text: str
     synthetic: bool = False
@@ -44,9 +44,23 @@ def _entries(text: str, lesson_kind: str = "lesson") -> list[Entry]:
     ]
 
 
-def load_library(path: Path | None = None, *, perf_lessons: bool = True) -> list[Entry]:
+def market_trends_path() -> Path:
+    """Where studio-pulse's market radar writes ``market_trends.yaml`` (its ``radar.creative_forge_library``).
+
+    ``CREATIVE_FORGE_MARKET_TRENDS`` points at another file."""
+    import os
+
+    from creative_forge.paths import data_dir
+
+    env = os.environ.get("CREATIVE_FORGE_MARKET_TRENDS")
+    return Path(env) if env else data_dir() / "library" / "market_trends.yaml"
+
+
+def load_library(path: Path | None = None, *, perf_lessons: bool = True, market_trends: bool = True) -> list[Entry]:
     """The bundled library (or ``path``), plus the lessons ``forge perf report --write-lessons`` derived from real ad
-    performance (kind ``perf_lesson``), when that file exists."""
+    performance (kind ``perf_lesson``) and the market trends studio-pulse's radar derived from public store charts
+    (kind ``market_trend``, ``market_trends.yaml``: ``lessons:`` entries with ``id``/``title``/``text``), when those
+    files exist."""
     if path is None:
         text = resources.files("creative_forge.data").joinpath("library.yaml").read_text(encoding="utf-8")
     else:
@@ -58,6 +72,10 @@ def load_library(path: Path | None = None, *, perf_lessons: bool = True) -> list
         extra = lessons_path()
         if extra.is_file():
             entries += _entries(extra.read_text(encoding="utf-8"), "perf_lesson")
+    if market_trends:
+        trends = market_trends_path()
+        if trends.is_file():
+            entries += _entries(trends.read_text(encoding="utf-8"), "market_trend")
     return entries
 
 

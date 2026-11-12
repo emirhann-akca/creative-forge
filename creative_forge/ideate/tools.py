@@ -67,7 +67,8 @@ DRAFT = {
 DECLARATIONS = [
     {
         "name": "search_creative_library",
-        "description": "Search past production lessons and past concepts with their QA outcomes.",
+        "description": "Search past production lessons, ad-performance lessons, market trends from public store "
+        "charts and past concepts with their QA outcomes.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
