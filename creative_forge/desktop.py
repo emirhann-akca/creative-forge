@@ -427,7 +427,7 @@ def linux_entry(apps_dir: Path, program: Path, png: Path) -> Path:
     path.write_text(
         "[Desktop Entry]\nType=Application\n"
         f"Name={APP_NAME}\nComment=Video ad pipeline: runs, QA reports, review\n"
-        f'Exec="{program}"\nIcon={png}\nTerminal=false\nCategories=AudioVideo;Graphics;\n',
+        f'Exec="{program.as_posix()}"\nIcon={png.as_posix()}\nTerminal=false\nCategories=AudioVideo;Graphics;\n',
         encoding="utf-8",
     )
     path.chmod(0o755)
@@ -464,9 +464,16 @@ def _windows_dirs() -> list[Path]:
     out = []
     for folder in ("Desktop", "Programs"):
         res = subprocess.run(
-            ["powershell", "-NoProfile", "-NonInteractive", "-Command", f"[Environment]::GetFolderPath('{folder}')"],
+            [
+                "powershell",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                f"[Console]::OutputEncoding = [Text.Encoding]::UTF8; [Environment]::GetFolderPath('{folder}')",
+            ],
             capture_output=True,
-            text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
         )
         if res.stdout.strip():

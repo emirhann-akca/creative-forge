@@ -168,6 +168,6 @@ def test_windows_shortcut_points_at_the_launcher(tmp_path):
     target = subprocess.run(
         ["powershell", "-NoProfile", "-Command",
          f"(New-Object -ComObject WScript.Shell).CreateShortcut('{lnk}').TargetPath"],
-        capture_output=True, text=True, check=True,
+        capture_output=True, encoding="utf-8", errors="replace", check=True,
     ).stdout.strip()  # fmt: skip
     assert Path(target) == Path(sys.executable)

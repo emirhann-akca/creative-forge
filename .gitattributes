@@ -10,3 +10,5 @@
 *.jpg binary
 *.onnx binary
 *.zip binary
+*.ico binary
+*.icns binary
