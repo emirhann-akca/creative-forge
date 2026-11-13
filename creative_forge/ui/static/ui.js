@@ -1,7 +1,8 @@
-/* studio-ui 1.0.0 — shared behaviour for Studio Pulse and Creative Forge (byte-identical in both).
+/* studio-ui 1.1.0 — shared behaviour for Studio Pulse and Creative Forge (byte-identical in both).
    Theme toggle, tooltips, and a Cmd/Ctrl+K command palette. The palette reads its entries
-   from <script type="application/json" id="ui-commands">[{"label","href","hint"}]</script>;
-   labels for the theme button come from data-light / data-dark on the button. */
+   (a list of label, href, hint) from the JSON script element with id "ui-commands"; labels
+   for the theme button come from data-light / data-dark on the button. Pages inline this
+   file, so it must never contain a closing script tag. */
 (function () {
   var root = document.documentElement;
   try { var saved = localStorage.getItem('ui-theme'); if (saved) root.setAttribute('data-theme', saved); } catch (e) {}
@@ -56,7 +57,10 @@
   function fold(s) { return (s || '').toLocaleLowerCase('tr').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ı/g, 'i'); }
   function render() {
     var q = fold(input.value.trim());
-    shown = cmds.filter(function (c) { return !q || fold(c.label + ' ' + (c.hint || '')).indexOf(q) !== -1; }).slice(0, 30);
+    // Turkish softens a final consonant before a suffix (sağlık -> sağlığı): a query of 4+
+    // letters also matches without its last letter
+    var stem = q.length >= 4 ? q.slice(0, -1) : q;
+    shown = cmds.filter(function (c) { var h = fold(c.label + ' ' + (c.hint || '')); return !q || h.indexOf(q) !== -1 || h.indexOf(stem) !== -1; }).slice(0, 30);
     sel = Math.min(sel, Math.max(0, shown.length - 1));
     list.innerHTML = '';
     shown.forEach(function (c, i) {

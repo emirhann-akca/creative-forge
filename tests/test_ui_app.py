@@ -462,7 +462,7 @@ def test_playables_page_reads_check_output(client, root):
 def test_the_shared_design_system_is_served_and_pages_make_no_external_requests(client):
     css = (UI / "static" / "ui.css").read_text(encoding="utf-8")
     js = (UI / "static" / "ui.js").read_text(encoding="utf-8")
-    assert css.startswith("/* studio-ui 1.0.0") and js.startswith("/* studio-ui 1.0.0")
+    assert css.startswith("/* studio-ui ") and js.startswith("/* studio-ui ")  # pinned: test_studio_ui_pin
     assert client.get("/static/ui.css").text == css and client.get("/static/ui.js").text == js
     for path in PAGES:
         page = client.get(path).text

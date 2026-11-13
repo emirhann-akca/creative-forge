@@ -1,5 +1,6 @@
-/* studio-ui 1.0.0 — the design system shared by Studio Pulse and Creative Forge.
-   Keep this file byte-identical in both repos (tests compare its version line).
+/* studio-ui 1.1.0 — the design system shared by Studio Pulse and Creative Forge.
+   Keep this file byte-identical in both repos: each repo's tests pin its SHA-256, so a
+   change here must bump the version and update the pinned hash in both.
    Tokens first, then components. No external requests: fonts are the system's,
    icons are inline SVG. Light and dark come from one set of names; dark is selected
    by the OS unless the page sets data-theme. Chart series colours (--s1..--s8) and
@@ -99,7 +100,8 @@ code, kbd, pre { font-family: var(--mono); font-size: 12px; }
 .page-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 16px; }
 .page-head h1 { font-size: 20px; line-height: 1.25; margin: 0; font-weight: 650; letter-spacing: -.015em; }
 .page-head .sub { flex-basis: 100%; color: var(--text-2); font-size: 13px; margin-top: -2px; }
-.page-head .spacer { flex: 1; }
+.page-head .spacer, .spacer { flex: 1; }
+.row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: -4px 0 16px; }
 .seg { display: inline-flex; padding: 2px; border-radius: var(--r-2); background: var(--panel-2); border: 1px solid var(--line); }
 .seg a, .seg button { font: inherit; font-size: 12.5px; padding: 4px 10px; border-radius: 6px; color: var(--text-2); border: 0; background: none; cursor: pointer; text-decoration: none; }
@@ -117,6 +119,8 @@ code, kbd, pre { font-family: var(--mono); font-size: 12px; }
 .btn.ghost:hover { background: var(--panel-2); color: var(--text); }
 .btn.danger { color: var(--bad-text); }
 .btn.sm { font-size: 12px; padding: 3px 9px; }
+.btn svg { width: 14px; height: 14px; flex: none; }
+.badge svg { width: 11px; height: 11px; flex: none; }
 .btn[disabled] { opacity: .5; cursor: not-allowed; }
 .input, .select, textarea.input { font: inherit; font-size: 13px; padding: 7px 10px; border-radius: var(--r-2); border: 1px solid var(--line-2); background: var(--panel); color: var(--text); min-width: 0; }
 .input:focus, .select:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
@@ -161,6 +165,7 @@ table.t { width: 100%; border-collapse: collapse; font-size: 13px; }
 table.t th { text-align: left; font-weight: 550; color: var(--text-3); font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; position: sticky; top: 0; background: var(--panel); }
 table.t td { padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
 table.t td.nowrap, table.t td.date { white-space: nowrap; }
+table.t th.num, table.t td.num { text-align: right; }
 table.t tr:last-child td { border-bottom: 0; }
 table.t tbody tr:hover td { background: var(--panel-2); }
 table.t td.wrap { white-space: normal; }

@@ -258,7 +258,7 @@ _TR: dict[str, Any] = {
     "tc_to_screen": "ilk eleme için",
     "tc_to_decide": "karar için",
     "oc_pending": "henüz karar yok",
-    "oc_kill_early": "erken ele",
+    "oc_kill_early": "erken elendi",
     "oc_scale": "ölçekle",
     "oc_kill": "durdur",
     "oc_keep": "fark yok: kontrol kalır",
