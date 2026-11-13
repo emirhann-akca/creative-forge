@@ -116,7 +116,10 @@ dl.kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .mini-body { display: grid; gap: 3px; min-width: 0; }
 
 /* tests */
+.cell-table { min-width: 760px; }
 .cell-table td { vertical-align: middle; }
+.cell-table .who .mono { white-space: nowrap; }
+.picker table.t { min-width: 560px; }
 .cell-table .control-row td { background: var(--panel-2); }
 .cell-table .who .lbl { display: block; }
 .cell-table .up { color: var(--good-text); }
