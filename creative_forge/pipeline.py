@@ -107,6 +107,7 @@ class ConceptResult:
     master: dict[str, Any] = field(default_factory=dict)
     contact_sheet: Path | None = None
     work_dir: Path | None = None
+    hypothesis: str | None = None
     seconds: float = 0.0
 
     @property
@@ -303,7 +304,9 @@ class Pipeline:
         """One (hook, segment, end card, language) of a concept: assemble, mix, master, export every format, QA."""
         spec, r, a, e = self.spec, self.spec.render, self.spec.audio, self.spec.export
         hid, h, sid, seg, eid, end_spec, lang = variant
-        res = ConceptResult(c.id, variant={"hook": hid, "segment": sid, "end_card": eid, "language": lang})
+        res = ConceptResult(
+            c.id, variant={"hook": hid, "segment": sid, "end_card": eid, "language": lang}, hypothesis=c.hypothesis
+        )
         t0 = time.time()
         work = Path(tempfile.mkdtemp(prefix=f"{c.id}-", dir=self.work_root))  # private per job: no shared temp files
         res.work_dir = work

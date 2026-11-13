@@ -94,6 +94,8 @@ def demo_spec(out_dir: Path, gameplay: Path) -> dict:
                 "end_card": {"headline": "Try it yourself!", "button": "PLAY NOW"},
                 "music": {"prompt": "Upbeat playful puzzle game loop, bright marimba, 120 bpm", "volume_db": -19},
                 "formats": ["9:16", "4:5"],
+                "hypothesis": "A board cleared of dust in the first seconds stops the scroll better than plain "
+                "gameplay: higher hook rate and IPM than the control.",
                 "tags": {
                     "hook_type": "satisfying-clean",
                     "mechanic_shown": ["goods-sort"],
@@ -116,6 +118,8 @@ def demo_spec(out_dir: Path, gameplay: Path) -> dict:
                 "end_card": {"headline": "Fill every order!", "button": "PLAY NOW"},
                 "music": {"prompt": "Calm lo-fi groove for a cozy puzzle game", "volume_db": -20},
                 "formats": ["9:16", "4:5"],
+                "hypothesis": "A real hand washing the board reads as more tactile than an effect alone and lifts "
+                "CTR without hurting IPM.",
                 "tags": {
                     "hook_type": "real-hand",
                     "mechanic_shown": ["goods-sort"],

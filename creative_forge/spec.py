@@ -412,6 +412,9 @@ class Concept(_Model):
     sfx: list[SFX] = Field(default_factory=list)
     formats: list[FormatName] = Field(default_factory=lambda: ["9:16", "4:5"], min_length=1)
     tags: Tags = Field(default_factory=dict)  # e.g. {hook_type: satisfying-clean, emotion: [satisfaction]}
+    # What this concept is expected to show, written before it is tested ("a fail-state hook beats the control on
+    # IPM"). Not sent to any model; it goes into report.json and the concept board of `forge ui`.
+    hypothesis: str | None = Field(None, max_length=500)
     variants: Variants | None = None
     _hooks: list[tuple[str, HookSpec]] = PrivateAttr(default_factory=list)
     _segments: list[tuple[str, GameplaySpec | None]] = PrivateAttr(default_factory=list)

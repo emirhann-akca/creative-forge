@@ -108,6 +108,7 @@ def report_dict(rr: RunResult) -> dict[str, Any]:
             {
                 "concept": c.concept,
                 "variant": c.variant,
+                "hypothesis": c.hypothesis,
                 "status": c.status.value,
                 "error": c.error,
                 "timeline": c.timeline,
