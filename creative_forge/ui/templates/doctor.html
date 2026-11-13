@@ -1,8 +1,13 @@
 {% extends "base.html" %}
-{% block title %}Doctor - creative-forge{% endblock %}
+{% block title %}{{ t.doc_title }}{% endblock %}
 {% block body %}
-<section>
-  <h1>Doctor</h1>
+<div class="page-head">
+  <h1>{{ t.doc_title }}</h1>
+  <span class="spacer"></span>
+  <a class="btn" href="/settings">{{ t.nav_settings }}</a>
+  <p class="sub">{{ t.doc_sub }}</p>
+</div>
+<section class="card">
   {% include "_doctor_table.html" %}
 </section>
 {% endblock %}

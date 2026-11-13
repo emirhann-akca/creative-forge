@@ -1,15 +1,17 @@
-<div id="demo" {% if demo.state == "running" %}hx-get="/demo/status" hx-trigger="every 1s" hx-swap="outerHTML"{% endif %}>
+{% import "_icons.html" as ic -%}
+<div id="demo" class="demo" data-state="{{ demo.state }}" {% if demo.state == "running" %}hx-get="/demo/status" hx-trigger="every 1s" hx-swap="outerHTML"{% endif %}>
   {% if demo.state == "running" %}
-    <p><span class="badge warn">running</span> forge demo &rarr; <code>{{ demo.out_dir }}</code></p>
+    <p class="row"><span class="badge warn"><span class="dot warn live"></span>{{ t.demo_running }}</span> <span class="muted">{{ t.demo_running_hint }}</span></p>
   {% elif demo.state == "done" %}
-    <p><span class="badge pass">done</span>
-      {% if demo_rid %}<a href="/runs/{{ demo_rid }}">open the demo run</a>{% else %}<code>{{ demo.out_dir }}</code>{% endif %}</p>
+    <p class="row"><span class="badge good">{{ t.demo_done }}</span>
+      <a class="btn sm primary" href="/creatives{% if demo_rid %}?run={{ demo_rid|q }}{% endif %}">{{ t.demo_open }} {{ ic.icon("arrow") }}</a></p>
   {% elif demo.state == "failed" %}
-    <p><span class="badge fail">failed</span> exit code {{ demo.returncode }}</p>
+    <p class="row"><span class="badge bad">{{ t.demo_failed }}</span> <span class="muted">{{ t.exit_code }} {{ demo.returncode }}</span></p>
   {% endif %}
   {% if demo.state != "running" %}
-    <form hx-post="/demo" hx-target="#demo" hx-swap="outerHTML">
-      <button type="submit">{% if demo.state == "idle" %}Run the demo{% else %}Run it again{% endif %}</button>
+    <form hx-post="/demo" hx-target="#demo" hx-swap="outerHTML" class="row">
+      <button class="btn{% if demo.state == 'idle' %} primary{% endif %}" type="submit">{{ ic.icon("play") }}{% if demo.state == "idle" %}{{ t.demo_try }}{% else %}{{ t.demo_again }}{% endif %}</button>
+      {% if demo.state == "idle" %}<span class="muted">{{ t.demo_hint }}</span>{% endif %}
     </form>
   {% endif %}
   {% if demo.lines %}<pre class="log">{{ demo.lines|join("\n") }}</pre>{% endif %}

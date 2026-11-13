@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% import "_icons.html" as ic %}
+{% import "_macros.html" as m %}
+{% block title %}{{ t.nav_tests }}{% endblock %}
+{% block body %}
+<div class="page-head">
+  <h1>{{ t.nav_tests }}</h1>
+  <span class="spacer"></span>
+  <a class="btn primary" href="/tests/new">{{ ic.icon("plus") }}{{ t.cmd_new_test }}</a>
+  <p class="sub">{{ t.tc_sub }}</p>
+</div>
+<div class="callout info">{{ ic.icon("info") }}<div>{{ t.tc_standard|safe }}</div></div>
+{% if results %}
+  {% for r in results %}
+  <section class="card">
+    <header>
+      <h2><a href="/tests/{{ r.cell.id }}">{{ r.cell.name }}</a></h2>{{ m.cell_status(r.cell.status, t) }}
+      {% if r.cell.locked %}<span class="badge outline" data-tip="{{ t.tc_locked_tip }}">{{ ic.icon("lock") }} {{ t.tc_locked }}</span>{% endif %}
+      {% if r.cell.tampered %}<span class="badge bad">{{ t.tc_tampered }}</span>{% endif %}
+      <span class="spacer"></span>
+      <span class="muted small">{{ r.cell.network }} · {{ t["m_" ~ r.cell.metric] }}{% if r.since %} · {{ r.since }} → {{ r.cell.ended_on or t.today }}{% endif %}</span>
+    </header>
+    {% include "_cell_table.html" %}
+  </section>
+  {% endfor %}
+{% else %}
+<section class="card"><div class="empty">
+  <div class="ic">{{ ic.icon("tests") }}</div>
+  <h3>{{ t.tc_empty }}</h3>
+  <p>{% if known %}{{ t.tc_empty_bd }}{% else %}{{ t.tc_empty_nocr }}{% endif %}</p>
+  {% if known %}<a class="btn primary" href="/tests/new">{{ ic.icon("plus") }}{{ t.tc_first }}</a>{% else %}<a class="btn" href="/creatives">{{ t.nav_creatives }}</a>{% endif %}
+</div></section>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% import "_icons.html" as ic %}
+{% block title %}{{ t.nav_campaigns }}{% endblock %}
+{% block body %}
+<div class="page-head">
+  <h1>{{ t.nav_campaigns }}</h1><span class="badge dashed">{{ t.cp_badge }}</span>
+  <p class="sub">{{ t.cp_sub }}</p>
+</div>
+<div class="callout info">{{ ic.icon("info") }}<div>{{ t.cp_why }}</div></div>
+<div class="grid c2">
+  <section class="card">
+    <header><span class="step-ic">6</span><h2>{{ t.cp_r6 }}</h2><span class="spacer"></span><span class="badge outline">{{ t.cp_r6_when }}</span></header>
+    <p class="soft">{{ t.cp_r6_bd }}</p>
+    <ul class="ticks">{% for x in t.cp_r6_items %}<li>{{ x }}</li>{% endfor %}</ul>
+  </section>
+  <section class="card">
+    <header><span class="step-ic">7</span><h2>{{ t.cp_r7 }}</h2><span class="spacer"></span><span class="badge outline">{{ t.cp_r7_when }}</span></header>
+    <p class="soft">{{ t.cp_r7_bd }}</p>
+    <ul class="ticks">{% for x in t.cp_r7_items %}<li>{{ x }}</li>{% endfor %}</ul>
+  </section>
+</div>
+<section class="card flush">
+  <header><h2>{{ t.cp_preview }}</h2><span class="spacer"></span><span class="muted small">{{ t.cp_preview_hint }}</span></header>
+  <div class="table-scroll pad"><table class="t ghost-table">
+    <thead><tr>{% for h in t.cp_cols %}<th{% if not loop.first %} class="num"{% endif %}>{{ h }}</th>{% endfor %}</tr></thead>
+    <tbody><tr><td colspan="{{ t.cp_cols|length }}"><div class="empty compact"><div class="ic">{{ ic.icon("campaigns") }}</div><h3>{{ t.cp_empty }}</h3><p>{{ t.cp_empty_bd }}</p>
+      <a class="btn sm" href="/perf">{{ t.nav_perf }}</a></div></td></tr></tbody>
+  </table></div>
+</section>
+{% endblock %}

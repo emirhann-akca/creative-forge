@@ -1,11 +1,15 @@
 <div id="doctor-table">
-  <p>{% if blocked %}<span class="badge fail">blocking problems</span>{% else %}<span class="badge pass">ready</span>{% endif %}
-    <span class="muted">same checks as <code>forge doctor</code></span></p>
-  <table>
+  <p class="row">{% if blocked %}<span class="badge bad">{{ t.doc_blocked }}</span>{% else %}<span class="badge good">{{ t.doc_ready }}</span>{% endif %}
+    <span class="muted">{{ t.doc_same }} <code>forge doctor</code></span></p>
+  <div class="table-scroll">
+  <table class="t">
+    <thead><tr><th>{{ t.col_check }}</th><th>{{ t.col_status }}</th><th>{{ t.col_detail }}</th></tr></thead>
     <tbody>
     {% for i in items %}
-      <tr><th>{{ i.name }}</th><td><span class="badge {{ i.status }}">{{ i.status }}</span></td><td>{{ i.summary }}</td></tr>
+      {%- set cls = {"ok": "good", "warn": "warn", "fail": "bad", "info": "info"}.get(i.status, "outline") %}
+      <tr><td><b>{{ i.name }}</b></td><td><span class="badge {{ cls }}">{{ t["doc_" ~ i.status] }}</span></td><td class="wrap soft">{{ i.summary }}</td></tr>
     {% endfor %}
     </tbody>
   </table>
+  </div>
 </div>

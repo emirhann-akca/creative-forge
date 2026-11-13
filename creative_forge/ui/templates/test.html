@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% import "_icons.html" as ic %}
+{% import "_macros.html" as m %}
+{% block title %}{{ r.cell.name }}{% endblock %}
+{% block body %}
+{% set cell = r.cell %}{% set rule = cell.rule %}
+<nav class="crumbs" aria-label="{{ t.breadcrumb }}"><a href="/tests">{{ t.nav_tests }}</a> / <span>{{ cell.name }}</span></nav>
+<div class="page-head">
+  <h1>{{ cell.name }}</h1>{{ m.cell_status(cell.status, t) }}
+  <span class="spacer"></span>
+  {% if cell.status == "draft" %}
+    <form method="post" action="/tests/{{ cell.id }}/delete" onsubmit="return confirm('{{ t.tc_delete_confirm }}')">
+      <input type="hidden" name="token" value="{{ token }}"><button class="btn danger" type="submit">{{ t.tc_delete }}</button></form>
+    <form method="post" action="/tests/{{ cell.id }}/start" class="row">
+      <input type="hidden" name="token" value="{{ token }}">
+      <label class="sr-only" for="start-on">{{ t.tc_start_on }}</label><input class="input" type="date" id="start-on" name="on" value="{{ today }}">
+      <button class="btn primary" type="submit">{{ ic.icon("lock") }}{{ t.tc_start }}</button></form>
+  {% elif cell.status == "running" %}
+    <form method="post" action="/tests/{{ cell.id }}/close" onsubmit="return confirm('{{ t.tc_close_confirm }}')">
+      <input type="hidden" name="token" value="{{ token }}"><button class="btn" type="submit">{{ t.tc_close }}</button></form>
+  {% endif %}
+  <p class="sub">{{ cell.network }} · {{ t["m_" ~ cell.metric] }} · {{ t.tc_created }} {{ cell.created_at|when(lang) }}{% if cell.started_on %} · {{ t.tc_window }} {{ cell.started_on }} → {{ cell.ended_on or t.today }}{% endif %}</p>
+</div>
+{% if error %}<div class="callout bad" role="alert">{{ ic.icon("alert") }}<div>{{ error }}</div></div>{% endif %}
+{% if cell.tampered %}<div class="callout bad" role="alert">{{ ic.icon("alert") }}<div><b>{{ t.tc_tampered }}</b> {{ t.tc_tampered_bd }}</div></div>{% endif %}
+{% if cell.status == "draft" %}<div class="callout warn">{{ ic.icon("info") }}<div>{{ t.tc_draft_note }}</div></div>
+{% elif cell.status == "running" and not r.has_data %}<div class="callout">{{ ic.icon("clock") }}<div>{{ t.tc_no_data|format(cell.network, cell.started_on) }} <a href="/settings#import">{{ t.st_perf_btn }}</a></div></div>{% endif %}
+
+<div class="grid c2 test-top">
+  <section class="card rule-card">
+    <header><h2>{{ t.tc_rule }}</h2><span class="spacer"></span>
+      {% if cell.locked %}<span class="badge good" data-tip="SHA-256 {{ cell.rule_sha256 }}">{{ ic.icon("lock") }} {{ t.tc_locked_at|format(cell.locked_at|when(lang)) }}</span>{% else %}<span class="badge dashed">{{ t.tc_unlocked }}</span>{% endif %}</header>
+    {% if rule.text %}<p class="rule-text">{{ rule.text }}</p>{% endif %}
+    <dl class="kv">
+      <dt>{{ t.tc_scale_if }}</dt><dd>{{ t.tc_lift }} ≥ {{ rule.scale_pct|pct(lang, 0, true) }} · P(&gt;) ≥ {{ (rule.confidence * 100)|pct(lang, 0) }}</dd>
+      <dt>{{ t.tc_kill_if }}</dt><dd>{{ t.tc_lift }} ≤ {{ (0 - rule.kill_pct)|pct(lang, 0, true) }} · P(&gt;) ≤ {{ ((1 - rule.confidence) * 100)|pct(lang, 0) }}</dd>
+      <dt>{{ t.tc_screen }}</dt><dd>{{ t.tc_screen_bd|format(rule.screen_installs) }}</dd>
+      <dt>{{ t.tc_decide }}</dt><dd>{{ t.tc_decide_bd|format(rule.decide_installs) }}</dd>
+      {% if cell.rule_sha256 %}<dt>SHA-256</dt><dd class="mono small">{{ cell.rule_sha256[:24] }}…</dd>{% endif %}
+    </dl>
+  </section>
+  <section class="card">
+    <header><h2>{{ t.tc_summary }}</h2></header>
+    <div class="kpis compact">
+      <div class="kpi"><div class="k">{{ t.tc_variants }}</div><div class="v">{{ r.outcomes|length }}</div></div>
+      <div class="kpi"><div class="k">{{ t.tc_decided }}</div><div class="v{% if not r.decided %} na{% endif %}">{{ r.decided }}</div></div>
+      <div class="kpi"><div class="k">{{ t.tc_control_installs }}</div><div class="v">{{ r.control.installs|num(lang, 0) }}</div></div>
+    </div>
+    <ul class="list outcomes">
+      {% for o in r.outcomes %}{% set k = lookup.get(o.arm.creative_id) %}
+      <li><span class="lbl">{{ t.tc_variant }} {{ loop.index }}</span><span class="grow">{{ k.concept if k and k.concept else o.arm.creative_id }} <span class="muted small">{{ k.variant if k else "" }}</span></span>
+        {% if cell.status == "draft" %}<span class="badge dashed">{{ t.cs_draft }}</span>{% elif o.verdict == "pending" %}<span class="badge dashed">{{ t.oc_pending }}</span>{% else %}{{ m.outcome_badge(o, t) }}{% endif %}</li>
+      {% endfor %}
+    </ul>
+    <p class="muted small">{{ t.tc_how }}</p>
+  </section>
+</div>
+
+<section class="card">
+  <header><h2>{{ t.tc_arms }}</h2></header>
+  {% include "_cell_table.html" %}
+</section>
+{% endblock %}

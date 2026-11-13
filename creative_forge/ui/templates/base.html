@@ -1,21 +1,60 @@
+{% import "_icons.html" as ic -%}
+{% set sh = shell() -%}
 <!doctype html>
-<html lang="en">
+<html lang="{{ lang }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="application-name" content="creative-forge">
+<meta name="color-scheme" content="light dark">
 <meta name="htmx-config" content='{"responseHandling":[{"code":"204","swap":false},{"code":"[23]..","swap":true},{"code":"422","swap":true,"error":false},{"code":"...","swap":false,"error":true}]}'>
-<title>{% block title %}creative-forge{% endblock %}</title>
-<link rel="stylesheet" href="/static/style.css">
+<title>{% block title %}{{ t.nav_overview }}{% endblock %} · Creative Forge</title>
+<script>try{var s=localStorage.getItem('ui-theme');if(s)document.documentElement.setAttribute('data-theme',s)}catch(e){}</script>
+<link rel="stylesheet" href="/static/ui.css">
+<link rel="stylesheet" href="/static/forge.css">
 <script src="/static/htmx.min.js" defer></script>
 </head>
 <body hx-headers='{"X-Forge-Token": "{{ token }}"}'>
-<header>
-  <a class="brand" href="/">creative-forge</a>
-  <nav><a href="/">Runs</a> <a href="/perf">Performance</a> <a href="/doctor">Doctor</a></nav>
-  <span class="muted">v{{ version }}</span>
-</header>
-<main>
+<div class="shell">
+  <aside class="sidebar" aria-label="{{ t.nav_label }}">
+    <a class="brand" href="/"><span class="logo">{{ ic.icon("flame") }}</span>Creative Forge</a>
+    <button class="search" type="button" data-cmdk>{{ ic.icon("search") }}<span>{{ t.search }}</span><kbd>{{ "⌘K" if is_mac else "Ctrl K" }}</kbd></button>
+    <nav class="scroll">
+      {% macro item(href, name, label, meta=None, sub=None) -%}
+      {%- set here = (path == href) or (href != "/" and path.startswith(href)) or (href == "/creatives" and path.startswith("/runs/")) -%}
+      <a class="nav-item" href="{{ href }}"{% if here %} aria-current="page"{% endif %}>
+        <span class="nav-ic">{{ ic.icon(name) }}</span><span class="nav-l">{{ label }}</span>{% if meta %}<span class="nav-m">{{ meta }}</span>{% endif %}
+      </a>
+      {%- endmacro %}
+      <div class="nav-h">{{ t.nav_h_work }}</div>
+      {{ item("/", "overview", t.nav_overview) }}
+      {{ item("/creatives", "creatives", t.nav_creatives, sh.exports or None) }}
+      {{ item("/concepts", "concepts", t.nav_concepts, sh.concepts or None) }}
+      {{ item("/tests", "tests", t.nav_tests, sh.running or None) }}
+      <div class="nav-h">{{ t.nav_h_data }}</div>
+      {{ item("/perf", "perf", t.nav_perf) }}
+      {{ item("/playables", "playables", t.nav_playables) }}
+      {{ item("/campaigns", "campaigns", t.nav_campaigns) }}
+      <div class="nav-h">{{ t.nav_h_app }}</div>
+      {{ item("/settings", "settings", t.nav_settings) }}
+    </nav>
+    <div class="foot">
+      <div class="seg" role="group" aria-label="{{ t.lang_label }}">
+        <a href="{{ path }}?lang=tr" hreflang="tr" lang="tr"{% if lang == "tr" %} aria-current="true"{% endif %}>TR</a>
+        <a href="{{ path }}?lang=en" hreflang="en" lang="en"{% if lang == "en" %} aria-current="true"{% endif %}>EN</a>
+      </div>
+      <button class="btn ghost sm theme" type="button" data-theme-toggle data-light="{{ t.theme_light }}" data-dark="{{ t.theme_dark }}">{{ t.theme_dark }}</button>
+    </div>
+  </aside>
+  <main class="main" id="main">
+    <div class="inner">
 {% block body %}{% endblock %}
-</main>
+      <p class="foot-note muted">Creative Forge {{ version }} · {{ t.footer_local }}</p>
+    </div>
+  </main>
+</div>
+<script type="application/json" id="ui-commands" data-placeholder="{{ t.cmdk_placeholder }}">{{ sh.commands|tojson }}</script>
+<script src="/static/ui.js"></script>
+<script src="/static/forge.js"></script>
 </body>
 </html>

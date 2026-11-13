@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% import "_icons.html" as ic %}
+{% import "_macros.html" as m %}
+{% block title %}{{ t.nav_creatives }}{% endblock %}
+{% block body %}
+<div class="page-head">
+  <h1>{{ t.nav_creatives }}</h1>
+  <span class="spacer"></span>
+  {% if total %}<a class="btn" href="/tests/new">{{ ic.icon("plus") }}{{ t.cmd_new_test }}</a>{% endif %}
+  <p class="sub">{{ t.cr_sub|format(total, runs|length) }}</p>
+</div>
+
+{% if total %}
+<div class="toolbar">
+  <nav class="seg" aria-label="{{ t.cr_filter_review }}">
+    <a href="{{ qlink('/creatives', f, review='', qa='') }}"{% if not f.review and not f.qa %} aria-current="true"{% endif %}>{{ t.cr_all }} <span class="muted">{{ total }}</span></a>
+    <a href="{{ qlink('/creatives', f, review='pending', qa='') }}"{% if f.review == 'pending' %} aria-current="true"{% endif %}>{{ t.rv_pending }} <span class="muted">{{ counts.get('pending', 0) }}</span></a>
+    <a href="{{ qlink('/creatives', f, review='approve', qa='') }}"{% if f.review == 'approve' %} aria-current="true"{% endif %}>{{ t.rv_approve }} <span class="muted">{{ counts.get('approve', 0) }}</span></a>
+    <a href="{{ qlink('/creatives', f, review='reject', qa='') }}"{% if f.review == 'reject' %} aria-current="true"{% endif %}>{{ t.rv_reject }} <span class="muted">{{ counts.get('reject', 0) }}</span></a>
+    <a href="{{ qlink('/creatives', f, review='', qa='fail') }}"{% if f.qa == 'fail' %} aria-current="true"{% endif %}>{{ t.cr_qa_failed }} <span class="muted">{{ failed }}</span></a>
+  </nav>
+  <form method="get" action="/creatives" class="filters">
+    {% if f.review %}<input type="hidden" name="review" value="{{ f.review }}">{% endif %}
+    {% if f.qa %}<input type="hidden" name="qa" value="{{ f.qa }}">{% endif %}
+    {% for key, label in [("hook", t.tag_hook_type), ("mechanic", t.tag_mechanic), ("fmt", t.tag_format), ("concept", t.col_concept), ("run", t.col_run)] %}
+      {% if facets[key] %}
+      <label class="sr-only" for="f-{{ key }}">{{ label }}</label>
+      <select class="select" id="f-{{ key }}" name="{{ key }}" onchange="this.form.submit()">
+        <option value="">{{ label }}: {{ t.any }}</option>
+        {% for v in facets[key] %}<option value="{{ v }}"{% if f[key] == v %} selected{% endif %}>{{ label }}: {{ v }}</option>{% endfor %}
+      </select>
+      {% endif %}
+    {% endfor %}
+    <noscript><button class="btn sm" type="submit">{{ t.apply }}</button></noscript>
+    {% if filtered %}<a class="btn ghost sm" href="/creatives">{{ ic.icon("x") }}{{ t.clear_filters }}</a>{% endif %}
+  </form>
+</div>
+
+{% if creatives %}
+<div class="gallery">
+  {% for c in creatives %}{% include "_card.html" %}{% endfor %}
+</div>
+{% else %}
+<section class="card"><div class="empty">
+  <div class="ic">{{ ic.icon("search") }}</div><h3>{{ t.cr_none_filtered }}</h3><p>{{ t.cr_none_filtered_bd }}</p>
+  <a class="btn" href="/creatives">{{ t.clear_filters }}</a>
+</div></section>
+{% endif %}
+{% else %}
+<section class="card"><div class="empty">
+  <div class="ic">{{ ic.icon("film") }}</div>
+  <h3>{{ t.cr_empty }}</h3>
+  <p>{{ t.cr_empty_bd }}</p>
+  <div class="center">{% include "_demo.html" %}</div>
+  <p class="muted small">{{ t.or_cli }} <code>forge run spec.yaml</code> · {{ t.cr_root }} <code>{{ root }}</code></p>
+</div></section>
+{% endif %}
+{% endblock %}

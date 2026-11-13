@@ -1,0 +1,9 @@
+{% import "_macros.html" as m %}
+{# The current decision of one export. Needs c, t, lang. #}
+{%- set d = c.decision -%}
+<div class="decision-now">
+  <div class="row">{{ m.review_badge(c.review, t) }}{% if d %}<span class="muted small">{{ d.get("reviewer") }} · {{ d.get("at")|when(lang) }}</span>{% endif %}</div>
+  {% if d.get("note") %}<p class="note">“{{ d.get("note") }}”</p>{% endif %}
+  {% if c.review == "stale" %}<p class="callout warn small">{{ t.rv_stale_bd }}</p>{% endif %}
+  {% if d.get("sha256") %}<p class="muted small mono" data-tip="{{ t.rv_hash_tip }}">SHA-256 {{ d.get("sha256")[:16] }}…</p>{% endif %}
+</div>

@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% import "_icons.html" as ic %}
+{% block title %}{{ t.nav_settings }}{% endblock %}
+{% block body %}
+<div class="page-head">
+  <h1>{{ t.nav_settings }}</h1>
+  <p class="sub">{{ t.se_sub }}</p>
+</div>
+<nav class="tabs" aria-label="{{ t.nav_settings }}">
+  <a href="#networks">{{ t.se_networks }}</a><a href="#import">{{ t.se_import }}</a><a href="#production">{{ t.se_production }}</a><a href="#folders">{{ t.se_folders }}</a><a href="#system">{{ t.se_system }}</a>
+</nav>
+
+<section class="card flush" id="networks">
+  <header><h2>{{ t.se_networks }}</h2><span class="spacer"></span><span class="muted small">{{ t.se_secret_note }}</span></header>
+  <div class="table-scroll pad"><table class="t">
+    <thead><tr><th>{{ t.col_network }}</th><th>{{ t.se_how }}</th><th>{{ t.col_status }}</th><th>{{ t.se_variable }}</th><th>{{ t.pf_last }}</th></tr></thead>
+    <tbody>
+    {% for c in conns %}
+      <tr>
+        <td><b>{{ c.label }}</b></td>
+        <td class="soft">{{ t.se_kind_api if c.kind == "api" else t.se_kind_csv }}</td>
+        <td>{% if c.kind == "api" %}{% if c.present %}<span class="badge good"><span class="dot"></span>{{ t.se_connected }}</span>{% else %}<span class="badge warn">{{ t.se_missing }}</span>{% endif %}
+            {% else %}<span class="badge outline">{{ t.se_csv_only }}</span>{% endif %}</td>
+        <td>{% if c.var %}<code>{{ c.var }}</code>{% if not c.present %} <span class="muted small">{{ t.se_set_env }}</span>{% endif %}{% else %}<span class="muted small">{{ t.se_no_key }}</span>{% endif %}</td>
+        <td>{% if c.last and c.last.at %}<span class="soft">{{ c.last.at|when(lang) }}</span>{% else %}<span class="muted">{{ t.pf_never }}</span>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  <p class="pad muted small">{{ t.se_api_hint }} <code>forge perf import meta --account act_… --since … --until …</code></p>
+</section>
+
+<section class="card" id="import">
+  <header><h2>{{ t.se_import }}</h2><span class="spacer"></span><span class="muted small">{{ t.se_import_hint }}</span></header>
+  {% if summary %}
+    <div class="callout info" role="status">{{ ic.icon("check") }}<div><b>{{ t.se_imported|format(summary.rows, uploaded) }}</b>
+      {{ t.se_imported_bd|format(summary.matched, summary.unmatched|length) }}
+      {% if summary.unmatched %}<details><summary>{{ t.se_unmatched_list }}</summary><div class="mono small">{% for n in summary.unmatched[:30] %}{{ n }}<br>{% endfor %}</div></details>{% endif %}
+      <div class="row"><a class="btn sm" href="/perf">{{ t.nav_perf }}</a><a class="btn sm" href="/creatives">{{ t.nav_creatives }}</a></div></div></div>
+  {% endif %}
+  {% if import_error %}
+    <div class="callout bad" role="alert">{{ ic.icon("alert") }}<div><b>{{ t["se_err_" ~ import_error] }}</b>{% if import_detail %}<div class="mono small">{{ import_detail }}</div>{% endif %}</div></div>
+  {% endif %}
+  <form method="post" action="/settings/import" enctype="multipart/form-data" class="form-grid import-form">
+    <input type="hidden" name="token" value="{{ token }}">
+    <div class="field"><label for="csv-file">{{ t.se_file }}</label><input class="input" type="file" id="csv-file" name="file" accept=".csv,.tsv,.txt,text/csv" required><span class="hint">{{ t.se_file_hint }}</span></div>
+    <div class="field"><label for="csv-network">{{ t.col_network }}</label>
+      <select class="select" id="csv-network" name="network">{% for n in csv_networks %}<option value="{{ n }}">{{ n }}</option>{% endfor %}</select>
+      <span class="hint">{{ t.se_network_hint }}</span></div>
+    <div class="field"><label for="csv-account">{{ t.se_account }}</label><input class="input" id="csv-account" name="account" placeholder="csv" maxlength="64"><span class="hint">{{ t.se_account_hint }}</span></div>
+    <div class="field field-btn"><button class="btn primary" type="submit">{{ ic.icon("upload") }}{{ t.se_import_btn }}</button></div>
+  </form>
+</section>
+
+<section class="card flush" id="production">
+  <header><h2>{{ t.se_production }}</h2><span class="spacer"></span><span class="muted small">{{ t.se_production_hint }}</span></header>
+  <div class="table-scroll pad"><table class="t">
+    <thead><tr><th>{{ t.se_service }}</th><th>{{ t.se_what }}</th><th>{{ t.col_status }}</th><th>{{ t.se_variable }}</th></tr></thead>
+    <tbody>{% for p in production %}
+      <tr><td><b>{{ p.label }}</b></td><td class="soft">{{ t["se_what_" ~ p.what] }}</td>
+        <td>{% if p.present %}<span class="badge good"><span class="dot"></span>{{ t.se_present }}</span>{% else %}<span class="badge outline">{{ t.se_absent }}</span>{% endif %}</td>
+        <td><code>{{ p.var }}</code></td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+</section>
+
+<section class="card flush" id="folders">
+  <header><h2>{{ t.se_folders }}</h2></header>
+  <div class="table-scroll pad"><table class="t">
+    <tbody>{% for key, p, exists in folders %}
+      <tr><td><b>{{ t["se_f_" ~ key] }}</b></td><td class="mono small wrap">{{ p }}</td><td>{% if exists %}<span class="badge good">{{ t.se_exists }}</span>{% else %}<span class="badge outline">{{ t.se_not_yet }}</span>{% endif %}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+  <p class="pad muted small">{{ t.se_folders_hint }} <code>forge app --root …</code> · <code>CREATIVE_FORGE_HOME</code></p>
+</section>
+
+<section class="card" id="system">
+  <header><h2>{{ t.se_system }}</h2><span class="spacer"></span><a class="btn ghost sm" href="/doctor">{{ t.se_full_page }} {{ ic.icon("arrow") }}</a></header>
+  <div hx-get="/doctor?partial=1" hx-trigger="load" hx-swap="outerHTML"><p class="muted">{{ t.se_checking }}</p></div>
+</section>
+
+<section class="card" id="demo-data">
+  <header><h2>{{ t.se_demo }}</h2></header>
+  <p class="soft small">{{ t.se_demo_bd }}</p>
+  {% include "_demo.html" %}
+</section>
+{% endblock %}

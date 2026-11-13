@@ -66,9 +66,10 @@ def test_runs_list_and_run_page(client):
     r = client.get("/")
     assert r.status_code == 200 and RID in r.text and "fail" in r.text
     assert 'X-Forge-Token": "test-token"' in r.text and "/static/htmx.min.js" in r.text
-    page = client.get(f"/runs/{RID}")
+    page = client.get(f"/runs/{RID}?lang=en")
     assert page.status_code == 200
     assert "t_a_9x16.mp4" in page.text and "t_b_9x16.mp4" in page.text and "failed: true_peak" in page.text
+    assert "Kalan denetimler: true_peak" in client.get(f"/runs/{RID}?lang=tr").text
     assert client.get(f"/runs/{RID}/report.html").text.endswith("QA report Ş</body></html>")
     assert client.get("/static/htmx.min.js").status_code == 200
 
@@ -122,7 +123,13 @@ def test_reject_needs_a_note_and_errors_render_in_place(client, root):
         data={"file": "t_b_9x16.mp4", "decision": "reject", "note": "  "},
         headers={"X-Forge-Token": TOKEN},
     )
-    assert r.status_code == 422 and "a rejection needs a note" in r.text and "<article" in r.text
+    assert r.status_code == 422 and "Ret için not gerekli" in r.text and "<article" in r.text
+    en = client.post(
+        f"/runs/{RID}/review?lang=en",
+        data={"file": "t_b_9x16.mp4", "decision": "reject", "note": ""},
+        headers={"X-Forge-Token": TOKEN},
+    )
+    assert en.status_code == 422 and "A rejection needs a note" in en.text
     assert load_review(root / RID)["decisions"] == {}
 
 

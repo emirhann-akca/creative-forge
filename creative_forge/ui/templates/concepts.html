@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% import "_icons.html" as ic %}
+{% import "_macros.html" as m %}
+{% block title %}{{ t.nav_concepts }}{% endblock %}
+{% block body %}
+<div class="page-head">
+  <h1>{{ t.nav_concepts }}</h1>
+  <p class="sub">{{ t.co_sub }}</p>
+</div>
+{% if concepts %}
+{% for k in concepts %}
+<section class="card concept" id="{{ k.key|q }}">
+  <header>
+    <h2>{{ k.concept }}</h2><span class="badge outline" data-tip="{{ t.lin_spec }}">{{ k.spec }}</span>
+    <span class="spacer"></span>
+    <span class="muted small">{{ t.co_counts|format(k.variants|length, k.creatives|length, k.runs|length) }}</span>
+    <a class="btn ghost sm" href="/creatives?concept={{ k.concept|q }}">{{ t.co_open }} {{ ic.icon("arrow") }}</a>
+  </header>
+  <div class="concept-top">
+    <div class="hypo">
+      <div class="lbl">{{ t.co_hypothesis }}</div>
+      {% if k.hypothesis %}<p>{{ k.hypothesis }}</p>{% else %}<p class="muted">{{ t.co_no_hypothesis }} <code>hypothesis:</code></p>{% endif %}
+    </div>
+    <dl class="kv">
+      <dt>{{ t.tag_hook_type }}</dt><dd class="badges">{% for x in k.hook_types %}<span class="badge info">{{ x }}</span>{% else %}<span class="muted">—</span>{% endfor %}</dd>
+      <dt>{{ t.tag_mechanic }}</dt><dd class="badges">{% for x in k.mechanics %}<span class="badge outline">{{ x }}</span>{% else %}<span class="muted">—</span>{% endfor %}</dd>
+      <dt>{{ t.tag_emotion }}</dt><dd class="badges">{% for x in k.emotions %}<span class="badge outline">{{ x }}</span>{% else %}<span class="muted">—</span>{% endfor %}</dd>
+      <dt>{{ t.tag_format }}</dt><dd class="badges">{% for x in k.formats %}<span class="badge outline">{{ x }}</span>{% endfor %}</dd>
+    </dl>
+  </div>
+  <div class="variants">
+    {% for rid, v, items in k.variants %}
+    <div class="variant">
+      <div class="variant-name">
+        <span class="lbl">{{ t.lin_variant }}</span>
+        <b>{{ v.get("hook", "main") }}</b> <span class="muted">/ {{ v.get("segment", "main") }} / {{ v.get("end_card", "main") }}{% if v.get("language") %} · {{ v.get("language") }}{% endif %}</span>
+        <div class="muted small">{{ rid }}</div>
+      </div>
+      <div class="variant-exports">
+        {% for c in items %}
+        <a class="mini" href="/runs/{{ c.rid|qp }}/exports/{{ c.file|q }}">
+          <span class="thumb {{ 'r4x5' if c.rec.format == '4:5' else '' }}" style="background-image:url('/runs/{{ c.rid|qp }}/poster/{{ c.file|q }}')"></span>
+          <span class="mini-body"><b>{{ c.rec.format }}</b>
+            <span class="badges">{{ m.qa_badge(c.rec.status, t) }}{{ m.review_badge(c.review, t) }}</span>
+            {% if c.primary %}<span class="small soft">IPM {{ c.primary.ipm|num(lang, 1) }} · {{ c.primary.network }}</span>{% endif %}
+          </span>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endfor %}
+{% else %}
+<section class="card"><div class="empty">
+  <div class="ic">{{ ic.icon("concepts") }}</div><h3>{{ t.co_empty }}</h3><p>{{ t.co_empty_bd }}</p>
+  <div class="center">{% include "_demo.html" %}</div>
+</div></section>
+{% endif %}
+{% endblock %}

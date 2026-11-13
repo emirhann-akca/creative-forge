@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% import "_icons.html" as ic %}
+{% block title %}{{ t.cmd_new_test }}{% endblock %}
+{% block body %}
+<nav class="crumbs" aria-label="{{ t.breadcrumb }}"><a href="/tests">{{ t.nav_tests }}</a> / <span>{{ t.cmd_new_test }}</span></nav>
+<div class="page-head">
+  <h1>{{ t.cmd_new_test }}</h1>
+  <p class="sub">{{ t.tn_sub }}</p>
+</div>
+{% if error %}<div class="callout bad" role="alert">{{ ic.icon("alert") }}<div><b>{{ t.tn_error }}</b> {{ error }}</div></div>{% endif %}
+{% if not known %}
+<section class="card"><div class="empty">
+  <div class="ic">{{ ic.icon("film") }}</div><h3>{{ t.tn_no_creatives }}</h3><p>{{ t.tn_no_creatives_bd }}</p>
+  <a class="btn" href="/creatives">{{ t.nav_creatives }}</a> <a class="btn" href="/settings#import">{{ t.st_perf_btn }}</a>
+</div></section>
+{% else %}
+<form method="post" action="/tests" class="test-form">
+  <input type="hidden" name="token" value="{{ token }}">
+  <section class="card">
+    <h2>{{ t.tn_basics }}</h2>
+    <div class="form-grid">
+      <div class="field"><label for="name">{{ t.tn_name }}</label><input class="input" id="name" name="name" required maxlength="120" value="{{ v.name }}" placeholder="{{ t.tn_name_ph }}"></div>
+      <div class="field"><label for="network">{{ t.col_network }}</label>
+        <select class="select" id="network" name="network">{% for n in networks %}<option value="{{ n }}"{% if v.network == n %} selected{% endif %}>{{ n }}</option>{% endfor %}</select>
+        <span class="hint">{{ t.tn_network_hint }}</span></div>
+      <div class="field"><label for="metric">{{ t.tn_metric }}</label>
+        <select class="select" id="metric" name="metric">{% for x in metrics %}<option value="{{ x }}"{% if v.metric == x %} selected{% endif %}>{{ t["m_" ~ x] }}</option>{% endfor %}</select>
+        <span class="hint">{{ t.tn_metric_hint }}</span></div>
+    </div>
+  </section>
+
+  <section class="card flush">
+    <header><h2>{{ t.tn_pick }}</h2><span class="spacer"></span><span class="muted small">{{ t.tn_pick_hint }}</span></header>
+    <div class="table-scroll pad picker">
+    <table class="t">
+      <thead><tr><th class="pick">{{ t.tc_control }}</th><th class="pick">{{ t.tc_variant }}</th><th>{{ t.col_creative }}</th><th>{{ t.tag_format }}</th><th>{{ t.creative_id }}</th></tr></thead>
+      <tbody>
+      {% for k in known %}
+        <tr>
+          <td><input type="radio" name="control" value="{{ k.creative_id }}" id="c-{{ k.creative_id }}"{% if v.control == k.creative_id %} checked{% endif %} aria-label="{{ t.tc_control }}: {{ k.concept }}"></td>
+          <td><input type="checkbox" name="variants" value="{{ k.creative_id }}"{% if k.creative_id in v.variants %} checked{% endif %} aria-label="{{ t.tc_variant }}: {{ k.concept }}"></td>
+          <td><label for="c-{{ k.creative_id }}"><b>{{ k.concept or "—" }}</b> <span class="muted">{{ k.variant }}</span></label></td>
+          <td>{{ k.format }}</td>
+          <td class="mono small muted">{{ k.creative_id }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <header><h2>{{ t.tn_rule }}</h2><span class="spacer"></span><span class="badge outline">{{ ic.icon("lock") }} {{ t.tn_rule_lock }}</span></header>
+    <p class="soft small">{{ t.tn_rule_bd }}</p>
+    <div class="form-grid">
+      <div class="field"><label for="scale_pct">{{ t.tn_scale }}</label><input class="input" id="scale_pct" name="scale_pct" inputmode="decimal" value="{{ v.scale_pct|num(lang, 0) if v.scale_pct is number else v.scale_pct }}"><span class="hint">{{ t.tn_scale_hint }}</span></div>
+      <div class="field"><label for="kill_pct">{{ t.tn_kill }}</label><input class="input" id="kill_pct" name="kill_pct" inputmode="decimal" value="{{ v.kill_pct|num(lang, 0) if v.kill_pct is number else v.kill_pct }}"><span class="hint">{{ t.tn_kill_hint }}</span></div>
+      <div class="field"><label for="screen_installs">{{ t.tn_screen }}</label><input class="input" id="screen_installs" name="screen_installs" inputmode="numeric" value="{{ v.screen_installs }}"><span class="hint">{{ t.tn_screen_hint }}</span></div>
+      <div class="field"><label for="decide_installs">{{ t.tn_decide }}</label><input class="input" id="decide_installs" name="decide_installs" inputmode="numeric" value="{{ v.decide_installs }}"><span class="hint">{{ t.tn_decide_hint }}</span></div>
+      <div class="field"><label for="confidence">{{ t.tn_confidence }}</label><input class="input" id="confidence" name="confidence" inputmode="decimal" value="{{ v.confidence }}"><span class="hint">{{ t.tn_confidence_hint }}</span></div>
+    </div>
+    <div class="field"><label for="text">{{ t.tn_text }}</label>
+      <textarea class="input" id="text" name="text" rows="3" maxlength="2000" placeholder="{{ t.tn_text_ph }}">{{ v.text }}</textarea>
+      <span class="hint">{{ t.tn_text_hint }}</span></div>
+  </section>
+
+  <div class="form-actions">
+    <button class="btn" type="submit" name="start" value="0">{{ t.tn_save_draft }}</button>
+    <span class="row"><label class="sr-only" for="start_on">{{ t.tc_start_on }}</label><input class="input" type="date" id="start_on" name="start_on" value="{{ today }}">
+    <button class="btn primary" type="submit" name="start" value="1">{{ ic.icon("lock") }}{{ t.tn_save_start }}</button></span>
+  </div>
+</form>
+{% endif %}
+{% endblock %}

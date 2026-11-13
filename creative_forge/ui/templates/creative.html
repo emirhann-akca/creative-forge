@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% import "_icons.html" as ic %}
+{% import "_macros.html" as m %}
+{% block title %}{{ c.rec.concept }} · {{ c.rec.format }}{% endblock %}
+{% block body %}
+<nav class="crumbs" aria-label="{{ t.breadcrumb }}"><a href="/creatives">{{ t.nav_creatives }}</a> / <a href="/creatives?concept={{ c.rec.concept|q }}">{{ c.rec.concept }}</a> / <span>{{ c.rec.format }}</span></nav>
+<div class="page-head">
+  <h1>{{ c.rec.concept }} <span class="muted">{{ c.short_label }}</span></h1>
+  <span class="spacer"></span>
+  {% if has_report %}<a class="btn" href="/runs/{{ run.rid|qp }}/report.html" target="_blank" rel="noopener">{{ t.qa_report }} {{ ic.icon("external") }}</a>{% endif %}
+  {% if c.rec.creative_id %}<a class="btn" href="/tests/new?variant={{ c.rec.creative_id }}">{{ ic.icon("plus") }}{{ t.cr_add_to_test }}</a>{% endif %}
+  <div class="sub badges">{{ m.qa_badge(c.rec.status, t) }} {{ m.review_badge(c.review, t) }} <span class="badge outline">{{ c.rec.format }}</span>{% if c.primary %} {{ m.verdict_badge(c.primary.comparison, t, lang) }}{% endif %}</div>
+</div>
+
+<div class="detail">
+  <div class="player">
+    <video controls preload="metadata" playsinline poster="/runs/{{ run.rid|qp }}/poster/{{ c.file|q }}" src="/runs/{{ run.rid|qp }}/media/{{ c.file|q }}" class="{{ 'r4x5' if c.rec.format == '4:5' else 'r9x16' }}"></video>
+    {% if siblings %}
+    <div class="siblings">
+      <div class="lbl">{{ t.cr_siblings }}</div>
+      {% for s in siblings[:6] %}
+        <a class="sib" href="/runs/{{ s.rid|qp }}/exports/{{ s.file|q }}"><span class="thumb {{ 'r4x5' if s.rec.format == '4:5' else '' }}" style="background-image:url('/runs/{{ s.rid|qp }}/poster/{{ s.file|q }}')"></span><span><b>{{ s.rec.format }}</b><br><span class="muted small">{{ s.short_label }}</span></span></a>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  <div class="detail-main">
+    {% set view = "detail" %}{% set error = None %}
+    {% include "_review_panel.html" %}
+
+    <section class="card">
+      <h2>{{ t.cr_perf }}</h2>
+      {% if c.perf %}
+      <div class="table-scroll"><table class="t">
+        <thead><tr><th>{{ t.col_network }}</th><th class="num">{{ t.col_impressions }}</th><th class="num">{{ t.col_installs }}</th><th class="num">IPM</th><th class="num">CTR (%)</th><th class="num">CPI</th><th class="num">{{ t.col_spend }}</th><th>{{ t.col_ci }}</th><th>{{ t.col_verdict }}</th></tr></thead>
+        <tbody>{% for p in c.perf %}
+          <tr><td><b>{{ p.network }}</b></td><td class="num">{{ p.impressions|num(lang, 0) }}</td><td class="num">{{ p.installs|num(lang, 0) }}</td>
+            <td class="num">{{ p.ipm|num(lang, 2) }}</td><td class="num">{{ p.ctr|num(lang, 2) }}</td><td class="num">{{ p.cpi|num(lang, 2) }}</td><td class="num">{{ p.spend|num(lang, 2) }}</td>
+            <td class="muted">{{ p.comparison.ci[0]|num(lang, 2) }}–{{ p.comparison.ci[1]|num(lang, 2) }}</td><td>{{ m.verdict_badge(p.comparison, t, lang) }}</td></tr>
+        {% endfor %}</tbody>
+      </table></div>
+      <p class="muted small">{{ t.cr_perf_note }}</p>
+      {% elif c.rec.creative_id %}
+      <div class="empty compact"><div class="ic">{{ ic.icon("perf") }}</div><h3>{{ t.cr_no_perf }}</h3>
+        <p>{{ t.cr_no_perf_bd }}</p><a class="btn sm" href="/settings#import">{{ t.st_perf_btn }}</a></div>
+      {% else %}
+      <p class="muted">{{ t.cr_no_id }}</p>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      <h2>{{ t.cr_lineage }}</h2>
+      <ol class="lineage">
+        <li><span class="lbl">{{ t.lin_spec }}</span><b>{{ c.spec or "—" }}</b></li>
+        <li><span class="lbl">{{ t.lin_concept }}</span><a href="/concepts#{{ (c.spec ~ '.' ~ c.rec.concept)|q }}"><b>{{ c.rec.concept }}</b></a>{% if c.hypothesis %}<span class="soft small">{{ c.hypothesis }}</span>{% endif %}</li>
+        <li><span class="lbl">{{ t.lin_variant }}</span><span>{{ t.var_hook }} <b>{{ c.variant.get("hook", "main") }}</b> · {{ t.var_segment }} <b>{{ c.variant.get("segment", "main") }}</b> · {{ t.var_end }} <b>{{ c.variant.get("end_card", "main") }}</b> · {{ t.var_lang }} <b>{{ c.variant.get("language", "—") }}</b></span></li>
+        <li><span class="lbl">{{ t.lin_export }}</span><span><b>{{ c.rec.format }}</b> · <a href="/runs/{{ run.rid|qp }}">{{ run.rid }}</a></span></li>
+      </ol>
+      <dl class="kv">
+        <dt>{{ t.creative_id }}</dt><dd class="mono">{{ c.rec.creative_id or "—" }}</dd>
+        <dt>{{ t.ad_name }}</dt><dd class="mono">{{ c.rec.ad_name or "—" }}</dd>
+        <dt>{{ t.col_tags }}</dt><dd class="badges">{% for k, v in c.rec.tags.items() %}{% for x in (v if v is not string else [v]) %}<span class="badge outline" data-tip="{{ k }}">{{ k }}: {{ x }}</span>{% endfor %}{% endfor %}</dd>
+        {% if in_tests %}<dt>{{ t.nav_tests }}</dt><dd>{% for x in in_tests %}<a href="/tests/{{ x.id }}">{{ x.name }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</dd>{% endif %}
+      </dl>
+    </section>
+
+    <section class="card flush">
+      <header><h2>{{ t.cr_checks }}</h2><span class="spacer"></span><span class="muted small">{{ t.cr_checks_hint }}</span></header>
+      <div class="table-scroll pad"><table class="t">
+        <thead><tr><th>{{ t.col_check }}</th><th>{{ t.col_status }}</th><th class="num">{{ t.col_measured }}</th><th>{{ t.col_threshold }}</th><th>{{ t.col_note }}</th></tr></thead>
+        <tbody>
+        {% for x in c.pre_checks + c.checks %}
+          {%- set cls = {"pass": "good", "warn": "warn", "fail": "bad"}.get(x.status, "outline") %}
+          <tr><td><b>{{ x.check }}</b>{% if loop.index0 < c.pre_checks|length %} <span class="muted small">{{ t.cr_generation }}</span>{% endif %}</td>
+            <td><span class="badge {{ cls }}">{{ t["qa_" ~ x.status] if ("qa_" ~ x.status) in t else x.status }}</span></td>
+            <td class="num">{% if x.value is not none %}{{ x.value|num(lang, 2) }} {{ x.unit }}{% else %}—{% endif %}</td>
+            <td class="soft">{{ x.threshold }}</td><td class="wrap soft small">{{ x.message }}</td></tr>
+        {% else %}
+          <tr><td colspan="5" class="muted">{{ t.cr_no_checks }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+    </section>
+  </div>
+</div>
+{% endblock %}

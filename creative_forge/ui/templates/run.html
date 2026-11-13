@@ -1,18 +1,18 @@
 {% extends "base.html" %}
-{% block title %}{{ run.rid }} - creative-forge{% endblock %}
+{% import "_icons.html" as ic %}
+{% import "_macros.html" as m %}
+{% block title %}{{ run.rid }}{% endblock %}
 {% block body %}
-<section>
-  <h1>{{ run.rid }} <span class="badge {{ run.status }}">{{ run.status }}</span></h1>
-  <p>
-    {% if has_report %}<a href="/runs/{{ run.rid }}/report.html" target="_blank" rel="noopener">Open the QA report</a> &middot; {% endif %}
-    <span class="muted">{{ run.path }}</span>
-  </p>
-  <p class="muted">A decision is stored in <code>review.json</code> with the file's SHA-256; a re-render voids it.
-    Publishing stays on the command line: <code>forge publish "{{ run.path }}" --to deliver</code>
-    (refuses approved exports with failed checks unless you give <code>--override "reason"</code>).</p>
-</section>
-{% for e in run.exports %}
-  {% set d = run.decisions.get(e.file, {}) %}
+<nav class="crumbs" aria-label="{{ t.breadcrumb }}"><a href="/creatives">{{ t.nav_creatives }}</a> / <span>{{ run.rid }}</span></nav>
+<div class="page-head">
+  <h1>{{ run.rid }}</h1> {{ m.qa_badge(run.status, t) }}
+  <span class="spacer"></span>
+  {% if has_report %}<a class="btn" href="/runs/{{ run.rid|qp }}/report.html" target="_blank" rel="noopener">{{ t.qa_report }} {{ ic.icon("external") }}</a>{% endif %}
+  <a class="btn" href="/creatives?run={{ run.rid|q }}">{{ t.run_gallery }}</a>
+  <p class="sub">{{ t.run_sub|format(run.exports|length, run.approved) }} <span class="mono muted">{{ run.path }}</span></p>
+</div>
+<div class="callout info">{{ ic.icon("lock") }}<div>{{ t.run_hash_note }} <code>forge publish "{{ run.path }}" --to deliver</code></div></div>
+{% for c in creatives %}
   {% set error = None %}
   {% include "_export.html" %}
 {% endfor %}

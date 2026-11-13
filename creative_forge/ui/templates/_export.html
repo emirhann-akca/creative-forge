@@ -1,23 +1,18 @@
-<article class="export">
-  <div class="player">
-    <video controls preload="metadata" src="/runs/{{ run.rid }}/media/{{ e.file|urlencode }}"></video>
-  </div>
-  <div class="meta">
-    <h3>{{ e.file }}</h3>
-    <p>{{ e.concept }} &middot; {{ e.format }} &middot; QA <span class="badge {{ e.status }}">{{ e.status }}</span></p>
-    {% if e.failed %}<p class="fail-text">failed: {{ e.failed|join(", ") }}</p>{% endif %}
-    {% if e.warned %}<p class="muted">warn: {{ e.warned|join(", ") }}</p>{% endif %}
-    <p>Decision: <strong class="decision">{{ d.get("decision", "undecided") }}</strong>
-      {% if d %}<span class="muted">by {{ d.get("reviewer") }} at {{ d.get("at") }}</span>{% endif %}</p>
-    {% if d.get("note") %}<p class="note">&ldquo;{{ d.get("note") }}&rdquo;</p>{% endif %}
-    {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
-    <form hx-post="/runs/{{ run.rid }}/review" hx-target="closest article" hx-swap="outerHTML">
-      <input type="hidden" name="token" value="{{ token }}">
-      <input type="hidden" name="file" value="{{ e.file }}">
-      <label>Note <input name="note" placeholder="required to reject" value=""></label>
-      <label>Reviewer <input name="reviewer" placeholder="your name (default: OS user)"></label>
-      <button type="submit" name="decision" value="approve">Approve</button>
-      <button type="submit" name="decision" value="reject" class="secondary">Reject</button>
-    </form>
+{% import "_macros.html" as m %}
+{# One export on the run page; the review POST swaps it in place. #}
+<article class="card export" id="x-{{ c.rec.creative_id or c.file }}">
+  <div class="export-grid">
+    <div class="player"><video controls preload="none" playsinline poster="/runs/{{ run.rid|qp }}/poster/{{ c.file|q }}" src="/runs/{{ run.rid|qp }}/media/{{ c.file|q }}"></video></div>
+    <div class="meta">
+      <h3><a href="/runs/{{ run.rid|qp }}/exports/{{ c.file|q }}">{{ c.rec.concept }}</a> <span class="muted">{{ c.variant_label }} · {{ c.rec.format }}</span></h3>
+      <p class="mono muted small">{{ c.file }}</p>
+      <div class="badges">{{ m.qa_badge(c.rec.status, t) }}</div>
+      {% if c.rec.failed %}<p class="bad-text small">{{ t.qa_failed_list }}: {{ c.rec.failed|join(", ") }}</p>{% endif %}
+      {% if c.rec.warned %}<p class="muted small">{{ t.qa_warned_list }}: {{ c.rec.warned|join(", ") }}</p>{% endif %}
+      {% include "_decision.html" %}
+      {% if error %}<p class="callout bad" role="alert">{{ error }}</p>{% endif %}
+      {% set view = "" %}{% set loop_id = c.file %}
+      {% include "_review_form.html" %}
+    </div>
   </div>
 </article>

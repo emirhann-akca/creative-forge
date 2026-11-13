@@ -1,37 +1,98 @@
 {% extends "base.html" %}
+{% import "_icons.html" as ic %}
+{% import "_macros.html" as m %}
+{% block title %}{{ t.nav_overview }}{% endblock %}
 {% block body %}
-<section>
-  <h1>Runs</h1>
-  <p class="muted">Every folder under <code>{{ root }}</code> that holds a <code>report.json</code>.</p>
+<div class="page-head">
+  <h1>{{ t.ov_title }}</h1>
+  <span class="spacer"></span>
+  {% if creatives %}<a class="btn" href="/tests/new">{{ ic.icon("plus") }}{{ t.cmd_new_test }}</a>
+  <a class="btn primary" href="/creatives?review=pending">{{ t.ov_review_now }}</a>{% endif %}
+  <p class="sub">{{ t.ov_sub }}</p>
+</div>
+
+<div class="kpis">
+  <a class="kpi" href="/creatives"><div class="k">{{ t.kpi_creatives }}</div><div class="v{% if not creatives %} na{% endif %}">{{ creatives|length|num(lang, 0) }}</div><div class="d">{{ runs|length }} {{ t.kpi_runs_suffix }}</div></a>
+  <a class="kpi" href="/creatives?review=pending"><div class="k">{{ t.kpi_pending }}</div><div class="v{% if not pending %} na{% endif %}">{{ pending|length }}</div><div class="d">{{ t.kpi_pending_d }}</div></a>
+  <a class="kpi" href="/creatives?review=approve"><div class="k">{{ t.kpi_approved }}</div>{% set approved = creatives|selectattr("review", "equalto", "approve")|list|length %}<div class="v{% if not approved %} na{% endif %}">{{ approved }}</div><div class="d">{{ t.kpi_approved_d }}</div></a>
+  <a class="kpi" href="/creatives?qa=fail"><div class="k">{{ t.kpi_failed }}</div><div class="v{% if not failed %} na{% endif %}">{{ failed|length }}</div><div class="d">{{ t.kpi_failed_d }}</div></a>
+  <a class="kpi" href="/tests"><div class="k">{{ t.kpi_running }}</div><div class="v{% if not running %} na{% endif %}">{{ running|length }}</div><div class="d">{{ ready|length }} {{ t.kpi_ready_suffix }}</div></a>
+  <a class="kpi" href="/perf"><div class="k">{{ t.kpi_matched }}</div><div class="v{% if not matched %} na{% endif %}">{{ matched }}</div><div class="d">{% if has_perf %}{{ t.kpi_matched_d }}{% else %}{{ t.kpi_no_perf }}{% endif %}</div></a>
+</div>
+
+<div class="grid c2">
+  <section class="card">
+    <header><h2>{{ t.ov_today }}</h2><span class="spacer"></span><span class="lbl">{{ t.ov_today_lbl }}</span></header>
+    {% set any_item = failed or pending or stale or ready or tampered %}
+    {% for r in tampered %}
+      <div class="finding critical"><div class="ttl">{{ ic.icon("lock") }} <a href="/tests/{{ r.cell.id }}">{{ r.cell.name }}</a></div><div class="bd">{{ t.ov_tampered }}</div></div>
+    {% endfor %}
+    {% if failed %}
+      <div class="finding critical"><div class="ttl"><a href="/creatives?qa=fail">{{ t.ov_failed|format(failed|length) }}</a></div>
+        <div class="bd">{{ t.ov_failed_bd }}</div>
+        <div class="ev">{% for c in failed[:3] %}{{ c.rec.concept }} · {{ c.rec.format }}: {{ c.rec.failed|join(", ") }}{% if not loop.last %}<br>{% endif %}{% endfor %}</div></div>
+    {% endif %}
+    {% for r in ready %}
+      <div class="finding info"><div class="ttl"><a href="/tests/{{ r.cell.id }}">{{ t.ov_ready|format(r.cell.name) }}</a></div>
+        <div class="bd">{{ t.ov_ready_bd|format(r.decided, r.outcomes|length) }}</div></div>
+    {% endfor %}
+    {% if pending %}
+      <div class="finding warning"><div class="ttl"><a href="/creatives?review=pending">{{ t.ov_pending|format(pending|length) }}</a></div>
+        <div class="bd">{{ t.ov_pending_bd }}</div></div>
+    {% endif %}
+    {% if stale %}
+      <div class="finding warning"><div class="ttl"><a href="/creatives?review=stale">{{ t.ov_stale|format(stale|length) }}</a></div>
+        <div class="bd">{{ t.ov_stale_bd }}</div></div>
+    {% endif %}
+    {% if not any_item %}
+      <div class="empty compact"><div class="ic">{{ ic.icon("check") }}</div><h3>{{ t.ov_nothing }}</h3>
+        <p>{% if creatives %}{{ t.ov_nothing_bd }}{% else %}{{ t.ov_nothing_empty }}{% endif %}</p></div>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <header><h2>{{ t.ov_steps }}</h2><span class="spacer"></span><span class="lbl">{{ t.ov_steps_lbl }}</span></header>
+    <ul class="list steps">
+      <li><span class="step-ic{% if creatives %} done{% endif %}">{{ ic.icon("check") if creatives else "1" }}</span>
+        <div class="grow"><b>{{ t.st_creatives }}</b><div class="soft small">{{ t.st_creatives_bd }}</div></div>
+        {% if not creatives %}<a class="btn sm" href="#demo-card">{{ t.demo_try }}</a>{% endif %}</li>
+      <li><span class="step-ic{% if has_perf %} done{% endif %}">{{ ic.icon("check") if has_perf else "2" }}</span>
+        <div class="grow"><b>{{ t.st_perf }}</b><div class="soft small">{{ t.st_perf_bd }}</div></div>
+        {% if not has_perf %}<a class="btn sm" href="/settings#import">{{ t.st_perf_btn }}</a>{% endif %}</li>
+      <li><span class="step-ic{% if results %} done{% endif %}">{{ ic.icon("check") if results else "3" }}</span>
+        <div class="grow"><b>{{ t.st_test }}</b><div class="soft small">{{ t.st_test_bd }}</div></div>
+        {% if not results %}<a class="btn sm" href="/tests/new">{{ t.st_test_btn }}</a>{% endif %}</li>
+    </ul>
+  </section>
+</div>
+
+<section class="card flush" id="demo-card">
+  <header><h2>{{ t.ov_runs }}</h2><span class="spacer"></span>{% if runs %}<a class="btn ghost sm" href="/creatives">{{ t.ov_all_creatives }} {{ ic.icon("arrow") }}</a>{% endif %}</header>
   {% if runs %}
-  <table>
-    <thead><tr><th>Run</th><th>QA</th><th>Exports</th><th>Approved</th></tr></thead>
+  <div class="table-scroll pad">
+  <table class="t">
+    <thead><tr><th>{{ t.col_run }}</th><th>QA</th><th class="num">{{ t.col_exports }}</th><th class="num">{{ t.col_approved }}</th><th>{{ t.col_when }}</th></tr></thead>
     <tbody>
-    {% for r in runs %}
+    {% for r in runs[:8] %}
       <tr>
-        <td><a href="/runs/{{ r.rid }}">{{ r.rid }}</a></td>
-        <td><span class="badge {{ r.status }}">{{ r.status }}</span></td>
-        <td>{{ r.exports|length }}</td>
-        <td>{{ r.approved }} / {{ r.exports|length }}</td>
+        <td><a href="/runs/{{ r.rid|qp }}">{{ r.rid }}</a></td>
+        <td>{{ m.qa_badge(r.status, t) }}</td>
+        <td class="num">{{ r.exports|length }}</td>
+        <td class="num">{{ r.approved }} / {{ r.exports|length }}</td>
+        <td class="muted">{{ r.mtime|when(lang) }}</td>
       </tr>
     {% endfor %}
     </tbody>
   </table>
-  {% else %}
-  <p>No runs yet. Start the offline demo below, or run <code>forge run your-spec.yaml</code>.</p>
-  {% endif %}
-</section>
-
-<section>
-  <h2>Offline demo</h2>
-  <p class="muted">Runs <code>forge demo</code> with fake providers: no keys, no cost, about 15 s.</p>
-  {% include "_demo.html" %}
-</section>
-
-<section>
-  <h2>Setup</h2>
-  <div hx-get="/doctor?partial=1" hx-trigger="load" hx-swap="outerHTML">
-    <p class="muted">checking ffmpeg, OCR and folders...</p>
   </div>
+  {% else %}
+  <div class="empty">
+    <div class="ic">{{ ic.icon("film") }}</div>
+    <h3>{{ t.ov_no_runs }}</h3>
+    <p>{{ t.ov_no_runs_bd }}</p>
+    <div class="center">{% include "_demo.html" %}</div>
+    <p class="muted small">{{ t.or_cli }} <code>forge run spec.yaml</code></p>
+  </div>
+  {% endif %}
 </section>
 {% endblock %}

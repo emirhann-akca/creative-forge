@@ -43,6 +43,17 @@ def creatives_from(path: Path) -> list[dict[str, Any]]:
     return out
 
 
+def import_csv(
+    store: PerfStore, path: Path, network: str, account: str = "csv", overrides: dict[str, str] | None = None
+) -> ImportSummary:
+    """One CSV export into the store (``forge perf import csv`` and the upload on ``forge ui``'s settings page)."""
+    from creative_forge.perf.csvimport import read
+
+    summary = ImportSummary(network, account, "csv", pages=1)
+    store.upsert(read(Path(path), network, account, overrides), summary)
+    return summary
+
+
 def cmd_import(a: argparse.Namespace) -> int:
     store = _store(a)
 
@@ -72,7 +83,7 @@ def cmd_import(a: argparse.Namespace) -> int:
                 print(f"assets: {assets.rows} row(s), {assets.matched} matched by name, {linked} linked to a set")
             summary.pages = al.pages
         else:
-            from creative_forge.perf.csvimport import CsvImportError, read
+            from creative_forge.perf.csvimport import CsvImportError
 
             overrides = {}
             for item in a.column or []:
@@ -80,8 +91,7 @@ def cmd_import(a: argparse.Namespace) -> int:
                 if not sep:
                     raise CsvImportError(f"--column needs FIELD=HEADER, got {item!r}")
                 overrides[field.strip()] = header.strip()
-            summary = ImportSummary(a.network, a.account, "csv", pages=1)
-            store.upsert(read(Path(a.file), a.network, a.account, overrides), summary)
+            summary = import_csv(store, Path(a.file), a.network, a.account, overrides)
     except (PerfApiError, ConfigError, ValueError) as e:
         print(f"perf import failed: {e}", file=sys.stderr)
         return 1

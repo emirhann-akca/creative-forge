@@ -1,0 +1,38 @@
+{# Small pieces shared by the pages: status badges, numbers on a creative, the confidence badge. #}
+{% import "_icons.html" as ic %}
+
+{% macro qa_badge(status, t) -%}
+{%- set cls = {"pass": "good", "warn": "warn", "fail": "bad", "skip": "outline"}.get(status, "outline") -%}
+<span class="badge {{ cls }}" data-tip="{{ t.qa_tip }}">QA · {{ t["qa_" ~ status] if ("qa_" ~ status) in t else status }}</span>
+{%- endmacro %}
+
+{% macro review_badge(state, t) -%}
+{%- set cls = {"approve": "good", "reject": "bad", "stale": "warn", "pending": "dashed"}.get(state, "outline") -%}
+<span class="badge {{ cls }}">{{ t["rv_" ~ state] }}</span>
+{%- endmacro %}
+
+{% macro verdict_badge(cmp, t, lang, unit="") -%}
+{%- set v = cmp.verdict -%}
+{%- set cls = {"winner": "good", "loser": "bad", "insufficient data": "dashed", "no clear difference": "outline"}.get(v, "outline") -%}
+<span class="badge {{ cls }}" data-tip="{{ t.ci_tip }}: {{ cmp.ci[0]|num(lang, 2) }}–{{ cmp.ci[1]|num(lang, 2) }}{{ unit }} · n={{ cmp.n|num(lang, 0) }}">{{ t["vd_" ~ v.replace(" ", "_")] }}</span>
+{%- endmacro %}
+
+{% macro cell_status(status, t) -%}
+{%- set cls = {"draft": "dashed", "running": "info", "closed": "outline"}.get(status, "outline") -%}
+<span class="badge {{ cls }}">{{ t["cs_" ~ status] }}</span>
+{%- endmacro %}
+
+{% macro outcome_badge(o, t) -%}
+{%- set cls = {"scale": "good", "kill": "bad", "kill_early": "bad", "keep": "outline", "pending": "dashed"}.get(o.verdict, "outline") -%}
+<span class="badge {{ cls }}">{{ t["oc_" ~ o.verdict] }}</span>
+{%- endmacro %}
+
+{% macro tag_chips(c, t, limit=4) -%}
+{%- if c.hook_type %}<span class="badge outline" data-tip="{{ t.tag_hook_type }}">{{ c.hook_type }}</span>{% endif -%}
+{%- for m in c.mechanics[:2] %}<span class="badge outline" data-tip="{{ t.tag_mechanic }}">{{ m }}</span>{% endfor -%}
+{%- endmacro %}
+
+{% macro ci_strip(lo, hi, point, maxv, cls="") -%}
+{%- set m = maxv if maxv and maxv > 0 else 1 -%}
+<span class="ci {{ cls }}" aria-hidden="true"><span class="rng" style="left:{{ (lo / m * 100)|round(1) }}%;width:{{ ((hi - lo) / m * 100)|round(1) }}%"></span>{% if point is not none %}<span class="pt" style="left:{{ (point / m * 100)|round(1) }}%"></span>{% endif %}</span>
+{%- endmacro %}

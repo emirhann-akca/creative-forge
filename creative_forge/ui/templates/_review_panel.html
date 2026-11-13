@@ -1,0 +1,11 @@
+{% import "_macros.html" as m %}
+{# Decision card of the creative detail page; the review POST swaps it in place (view=detail). #}
+<article class="card" id="review">
+  <header><h2>{{ t.rv_title }}</h2><span class="spacer"></span>{% if saved %}<span class="badge good">{{ t.rv_saved }}</span>{% endif %}</header>
+  {% include "_decision.html" %}
+  {% if error %}<p class="callout bad" role="alert">{{ error }}</p>{% endif %}
+  {% if c.rec.failed %}<p class="callout bad small">{{ t.rv_failed_warn|format(c.rec.failed|join(", ")) }}</p>{% endif %}
+  {% set view = "detail" %}{% set loop_id = "d" %}
+  {% include "_review_form.html" %}
+  <p class="muted small">{{ t.rv_publish_hint }} <code>forge publish "{{ run.path }}" --to deliver</code></p>
+</article>

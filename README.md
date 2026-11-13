@@ -9,7 +9,7 @@ Spec-driven pipeline for mobile game video ads with an AI-generated hook and rea
 
 ```
 forge demo                                  # whole pipeline offline: fake providers, synthetic gameplay
-forge ui                                    # local web page: runs, QA reports, players, approve / reject
+forge ui                                    # the ads app: gallery, concepts, test cells, performance, approve / reject
 forge ideate --game "..." --clips a.mp4     # draft concepts with a tool-calling LLM + lesson retrieval
 forge plan   examples/ads.yaml              # cost estimate, spec lint and model licences, no calls
 forge segments capture.mp4                  # suggest gameplay segment in/out points (PySceneDetect)
@@ -37,11 +37,12 @@ forge comfy check                           # a ComfyUI GPU worker: VRAM, missin
 - **Agentic ideation**: Gemini function calling over five local tools, with retrieval over the lesson library. It stops when its concepts pass the pipeline's own validation and lint.
 - **Human in the loop**: `forge review` records decisions against file hashes; `forge publish` copies only approved, QA-clean exports with a manifest.
 - **A performance loop**: deterministic creative IDs and ad names that round-trip, a tag taxonomy, `forge perf import` from Meta, AppLovin and CSV exports into SQLite, `forge perf report` with intervals (no winner on a small sample), and lessons that `forge ideate` retrieves.
+- **An ads app for choosing, not just making**: `forge ui` / `forge app` (Turkish by default, English with `?lang=en`) shows every export as a playable card with IPM, CTR, CPI, spend and a confidence badge, a concept → variant board, approve / reject bound to the file hash, and **test cells**: 2–4 variants against a control, a kill / scale rule locked when the test starts, and sufficiency counted in installs.
 - **More exports per paid generation**: a variant matrix (hooks × segments × end cards × languages × formats) that pays once per hook, and `forge segments` to cut gameplay with PySceneDetect.
 - **Playables and licences**: `forge playable check|pack` against each network's published rules with a headless browser run, and a model licence registry that refuses non-commercial weights before any call.
 - **A GPU worker on the LAN**: Wan 2.1 first-last-frame and Wan 2.2 TI2V-5B through ComfyUI, with health, VRAM and model checks, resume by prompt id and an explicit cloud fallback (mock-tested; not yet run on a GPU).
 - **Runs on Windows 10/11, macOS (Apple Silicon) and Linux**: one-line installers that need no admin rights, a pinned ffmpeg, RapidOCR where Apple Vision is missing, and CI that installs the built wheel the way a user would on each OS, then runs the demo in a folder named `Çalışma Ş/İğ`.
-- 353 tests (about 1 min 45 s on an M4 Mac, most of it the headless-browser playable runs), run on Windows, macOS and Ubuntu with Python 3.11, 3.12 and 3.13; any text I/O that depends on the locale's encoding fails them. `forge demo` takes about 10 s.
+- 387 tests (about 1 min 45 s on an M4 Mac, most of it the headless-browser playable runs), run on Windows, macOS and Ubuntu with Python 3.11, 3.12 and 3.13; any text I/O that depends on the locale's encoding fails them. `forge demo` takes about 10 s.
 
 ![Demo export frames](docs/img/demo-frames.png)
 
@@ -152,7 +153,7 @@ py -3.13 -m venv .venv
 
 ```bash
 forge demo            # writes out/demo/: 2 concepts x 2 formats + report.html
-forge ui              # opens http://127.0.0.1:8765: the demo run, its report, players, approve / reject
+forge ui              # opens http://127.0.0.1:8765: overview, creatives gallery, concepts, tests, performance
 forge app             # the same UI in its own window (what the desktop icon runs)
 forge ideate --game "goods-sort puzzle" --clips out/demo/inputs/gameplay.mp4 --n 2   # scripted model, offline
 pytest                # from a clone
@@ -174,7 +175,20 @@ Which ffmpeg runs: `CREATIVE_FORGE_FFMPEG_DIR` (a folder holding ffmpeg and ffpr
 
 **`forge doctor`** reports ffmpeg and ffprobe (path, where they came from, version, missing features, which AAC encoders actually open), the OCR backend `--ocr auto` will use, Python, the data and cache folders and whether they and the working folder are writable, ComfyUI's `/system_stats` when `CREATIVE_FORGE_COMFYUI_URL` or `--comfyui URL` is given, and whether Application Default Credentials exist (only the file's `type` is shown, never its contents). It exits 1 on a blocking problem; `--json` prints the same as JSON.
 
-**`forge ui`** serves a local page on `127.0.0.1` (port 8765, or a free one): the runs under `--root` (default `out`), each run's QA report, the exports in a player (range requests, so seeking works), approve / reject with a note, `forge demo` in the background with its log, and the doctor checks. Approve and reject call the same `review.decide` as `forge review`, so a decision is tied to the file's SHA-256 and `forge publish` gates exactly as before; publishing stays on the command line. Requests with a non-loopback `Host` header are refused, and every change needs a per-process token that only the served pages carry. `--host 0.0.0.0` exposes it to your network, and anyone who can open the page can then approve exports. FastAPI, Jinja2 and [htmx](https://htmx.org) 2.0.11 (vendored with its 0BSD license); no Node build.
+**`forge ui`** serves the ads app on `127.0.0.1` (port 8765, or a free one); `forge app` opens the same pages in a window of their own. It reads the runs under `--root` (default `out`) and the performance store, and writes only through the functions the CLI uses. Pages are in Turkish by default and in English with `?lang=en` (remembered in a cookie); one dictionary holds every word, in `ui/i18n.py`.
+
+| Page | What it shows |
+|---|---|
+| Overview | what needs a decision today (QA failures, exports waiting for review, approvals voided by a re-render, tests that reached their threshold), counts, recent runs, and the next setup step when something is missing |
+| Creatives | every export as a card: a poster frame (one ffmpeg frame, cached by size and mtime) that plays inline, IPM / CTR / CPI / spend from the store when its creative ID matches, the `forge perf report` verdict as a confidence badge ("örneklem yetersiz" below the threshold), QA and review status, hook and mechanic tags; filters by review state, QA, tag, format, concept and run. The detail view has the QA checks with measured value and threshold, the lineage (spec → concept → variant → format), performance per network and approve / reject with a note |
+| Concepts | each concept's hypothesis (`hypothesis:` in the spec), hook types, mechanics, emotions and formats, with its renders underneath |
+| Tests | test cells; see [Test cells](#test-cells-a-control-a-locked-rule-and-installs) |
+| Performance | the `forge perf report` tables per network (per creative and per tag, any metric, any minimum) and the last import per network |
+| Playables | `forge playable check --json` results saved under `<root>/playables/` and each network's rules with their sources |
+| Campaigns | a placeholder: no network write call exists in the app; the read-only campaign tree comes with paid UA, writes and automation last and behind gates |
+| Settings | which network credentials are present (by variable name, never the value), a CSV upload that runs the same import as `forge perf import csv`, the data folders, `forge doctor`, the demo |
+
+Approve and reject call the same `review.decide` as `forge review`, so a decision is tied to the file's SHA-256 and `forge publish` gates exactly as before; a re-render shows the approval as void. Publishing stays on the command line. Requests with a non-loopback `Host` header are refused, and every change needs a per-process token that only the served pages carry. `--host 0.0.0.0` exposes it to your network, and anyone who can open the page can then approve exports. FastAPI, Jinja2, [htmx](https://htmx.org) 2.0.11 (vendored with its 0BSD license) and `ui.css` / `ui.js`, the design system shared byte for byte with studio-pulse; no Node build and no request leaves the machine.
 
 ## Windows notes
 
@@ -396,6 +410,21 @@ A rate's denominator counts only impressions from rows that report its numerator
 
 **Market trends.** [studio-pulse](https://github.com/emirhann-akca/studio-pulse)'s market radar scans public store charts daily and writes `<data dir>/library/market_trends.yaml` (schema `studio-pulse/market_trends/v1`: `lessons:` entries with `id`, `title`, `text`, the mechanic as a `mechanic_shown` value, themes, twists, suggested hooks and evidence ids; `CREATIVE_FORGE_MARKET_TRENDS` points elsewhere). `forge ideate` loads them as kind `market_trend`, so `search_creative_library` can answer "which mechanic is rising" next to the production and performance lessons. Every number in a trend's text carries its label ([observed], [store-reported]); hooks are marked as a suggestion. The `mechanic_shown` vocabulary has `color-sort`, `screw-pin` and `jam` for the subgenres the radar tracks.
 
+## Test cells: a control, a locked rule and installs
+
+`forge perf report` compares a creative with the rest of its network. A test cell compares 2–4 variants with one **control** creative on one network, under a rule written **before** the test starts:
+
+| Field | Default | Meaning |
+|---|---|---|
+| metric | IPM | also CTR or hook rate; the same definitions as `forge perf report` |
+| scale lift | +20 % | scale a variant at least this much better than the control … |
+| kill drop | 20 % | … kill one at least this much worse … |
+| confidence | 95 % | … when P(variant beats control) from the Beta posteriors is at least this (at most 1 − this to kill) |
+| first screen | 50 installs per arm | only a variant whose 95 % Wilson interval lies wholly below the control's is dropped here |
+| decision | 200 installs per arm | a 20–30 % IPM difference needs roughly 200–430; below this the page says "no decision yet: N more installs" |
+
+Cells live in the performance store (`test_cells` in `perf.sqlite`) and read `perf_rows` of their network from their first day on. Starting a cell stores the SHA-256 of its rule and refuses any later change to it; a started cell cannot be deleted, and a rule edited behind the app's back is reported as tampered. A draft counts no data. The logic is in [`perf/cells.py`](creative_forge/perf/cells.py) and reuses `perf.stats` and the report's aggregation.
+
 ## Playable ads: per-network check and packaging
 
 ```bash
@@ -475,13 +504,13 @@ The production scripts, the model choices, the failure modes and the QA rules co
 creative_forge/
   spec.py, pricing.py, ledger.py, cache.py, retry.py, config.py, generator.py
   providers/   base.py (interfaces), vertex.py (REST), comfyui.py (client + SDXL), comfyui_video.py (Wan), fake.py
-  perf/        store.py (SQLite), meta.py, applovin.py, csvimport.py, stats.py, report.py, lessons.py, commands.py
+  perf/        store.py (SQLite), meta.py, applovin.py, csvimport.py, stats.py, report.py, lessons.py, cells.py, commands.py
   playable/    rules.py (per-network rules + sources), static.py, dynamic.py + stubs.js (Playwright), pack.py
   stages/      video.py (gameplay, hook, end card, assembly), audio.py (mix, master, mux), export.py
   qa/          media_checks.py, audio_checks.py, seam.py, ocr.py (+ ocr_vision.swift), judge.py, runner.py
   ideate/      library.py (embedders, index), tools.py (function declarations), agent.py (loop)
   data/        pricing.yaml, library.yaml, model_licenses.yaml, tag_taxonomy.yaml, comfyui/*.json (workflows)
-  ui/          app.py (FastAPI), templates/ (Jinja2), static/ (htmx 2.0.11 + its license)
+  ui/          app.py (FastAPI), catalog.py, i18n.py (tr / en), templates/ (Jinja2), static/ (ui.css + ui.js shared with studio-pulse, forge.css, htmx)
   pipeline.py, review.py, report.py, lint.py, licenses.py, naming.py, tags.py, segments.py, imaging.py, demo.py, cli.py
   setup_ffmpeg.py (pinned builds), doctor.py, paths.py (platformdirs), fsutil.py (Windows-safe renames)
 install.sh, install.ps1   examples/   tests/   docs/ARCHITECTURE.md   .github/workflows/ (ci, release)

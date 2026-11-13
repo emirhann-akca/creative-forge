@@ -142,11 +142,11 @@ def test_ui_performance_page(store, tmp_path):
     (tmp_path / "out").mkdir()
     base = "http://127.0.0.1:8765"
     client = TestClient(create_app(tmp_path / "out", token="t", perf_db=store.path), base_url=base)
-    page = client.get("/perf")
-    assert page.status_code == 200 and "Creative performance" in page.text
+    page = client.get("/perf?lang=en")
+    assert page.status_code == 200 and "Per creative" in page.text and "<h2>meta</h2>" in page.text
     assert "cf1.puzzle-ads.oops.wrong-move.lvl7.tryit.9x16.en.fc972ce8b2" in page.text and "winner" in page.text
-    assert "&lt;" not in page.text.split("<h2>meta</h2>")[0][-50:]  # tables are markup, not escaped text
+    assert "kazanan" in client.get("/perf?lang=tr").text  # Turkish by default, the same verdicts
     assert client.get("/perf?metric=nope").status_code == 422
     empty_app = create_app(tmp_path / "out", token="t", perf_db=tmp_path / "none.sqlite")
-    empty = TestClient(empty_app, base_url=base).get("/perf")
-    assert "No performance store yet" in empty.text and not (tmp_path / "none.sqlite").exists()
+    empty = TestClient(empty_app, base_url=base).get("/perf?lang=en")
+    assert "No performance data yet" in empty.text and not (tmp_path / "none.sqlite").exists()

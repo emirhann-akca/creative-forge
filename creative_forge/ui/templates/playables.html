@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% import "_icons.html" as ic %}
+{% block title %}{{ t.nav_playables }}{% endblock %}
+{% block body %}
+{% set cls = {"pass": "good", "warn": "warn", "uncertain": "info", "fail": "bad", "info": "outline", "skip": "outline"} %}
+<div class="page-head">
+  <h1>{{ t.nav_playables }}</h1>
+  <p class="sub">{{ t.pl_sub }}</p>
+</div>
+{% if reports %}
+  {% for rep in reports %}
+  <section class="card">
+    <header><h2>{{ rep.name }}</h2><span class="spacer"></span><span class="muted small">{{ rep.mtime|when(lang) }}</span></header>
+    {% for file, results in rep.files.items() %}
+      <h3 class="h3 mono">{{ file }}</h3>
+      <div class="table-scroll"><table class="t">
+        <thead><tr><th>{{ t.col_network }}</th><th>{{ t.col_status }}</th><th>{{ t.pl_findings }}</th></tr></thead>
+        <tbody>
+        {% for r in results %}
+          {% set bad = r.findings|selectattr("status", "in", ["fail", "uncertain", "warn"])|list %}
+          <tr><td><b>{{ r.network }}</b></td>
+            <td><span class="badge {{ cls.get(r.status, 'outline') }}">{{ t["pl_" ~ r.status] if ("pl_" ~ r.status) in t else r.status }}</span></td>
+            <td class="wrap">{% for f in bad[:4] %}<div class="small"><span class="badge {{ cls.get(f.status, 'outline') }}">{{ t["pl_" ~ f.status] if ("pl_" ~ f.status) in t else f.status }}</span> <b>{{ f.rule }}</b> <span class="soft">{{ f.message }}</span>{% if f.source %} <a href="{{ f.source }}" target="_blank" rel="noopener noreferrer">{{ t.pl_source }}</a>{% endif %}</div>{% else %}<span class="muted small">{{ t.pl_all_pass|format(r.findings|length) }}</span>{% endfor %}
+              {% if bad|length > 4 %}<div class="muted small">+{{ bad|length - 4 }}</div>{% endif %}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+    {% endfor %}
+  </section>
+  {% endfor %}
+{% else %}
+<section class="card"><div class="empty">
+  <div class="ic">{{ ic.icon("playables") }}</div>
+  <h3>{{ t.pl_empty }}</h3>
+  <p>{{ t.pl_empty_bd }}</p>
+  <pre class="cmd">forge playable check game.html --network applovin --network unity --network meta \
+    --json "{{ folder }}/game.check.json"</pre>
+</div></section>
+{% endif %}
+
+<section class="card flush">
+  <header><h2>{{ t.pl_rules }}</h2><span class="spacer"></span><span class="muted small">{{ t.pl_rules_hint }}</span></header>
+  <div class="table-scroll pad"><table class="t">
+    <thead><tr><th>{{ t.col_network }}</th><th>{{ t.pl_packaging }}</th><th>{{ t.pl_size }}</th><th>MRAID</th><th>CTA</th><th>{{ t.pl_source }}</th></tr></thead>
+    <tbody>
+    {% for x in rules %}{% set n = x.net %}
+      <tr><td><b>{{ n.label }}</b>{% if not n.verified %} <span class="badge info">{{ t.pl_unverified }}</span>{% endif %}</td>
+        <td>{{ t["pl_pack_" ~ n.packaging] }}</td>
+        <td class="soft">{% if n.html_max %}HTML ≤ {{ (n.html_max / 1000000)|num(lang, 0) }} MB{% endif %}{% if n.html_max and n.zip_max %} · {% endif %}{% if n.zip_max %}zip ≤ {{ (n.zip_max / 1000000)|num(lang, 0) }} MB{% endif %}{% if not n.html_max and not n.zip_max %}—{% endif %}</td>
+        <td>{{ t["pl_mraid_" ~ n.mraid] }}{% if n.mraid_version %} {{ n.mraid_version }}{% endif %}</td>
+        <td class="mono small">{{ x.cta|join(", ") or "—" }}</td>
+        <td>{% if x.source %}<a href="{{ x.source }}" target="_blank" rel="noopener noreferrer">{{ ic.icon("external") }}</a>{% else %}—{% endif %}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</section>
+{% endblock %}

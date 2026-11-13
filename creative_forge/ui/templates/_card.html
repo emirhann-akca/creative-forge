@@ -1,0 +1,30 @@
+{% import "_macros.html" as m %}
+{# One creative in the gallery. Needs c, t, lang, m (macros), ic (icons). #}
+{%- set p = c.primary -%}
+<article class="cr">
+  <div class="cr-media">
+    <video controls data-quiet="{{ t.play }}" preload="none" playsinline src="/runs/{{ c.rid|qp }}/media/{{ c.file|q }}" poster="/runs/{{ c.rid|qp }}/poster/{{ c.file|q }}"></video>
+    <div class="cr-stats">
+      <span class="chip-dark">{{ c.rec.format }}</span>
+      {% if p %}
+        <span class="chip-dark" data-tip="{{ p.network }}">IPM {{ p.ipm|num(lang, 1) }}</span>
+        <span class="chip-dark">CTR {{ p.ctr|pct(lang, 2) }}</span>
+        {% if p.cpi is not none %}<span class="chip-dark">CPI {{ p.cpi|num(lang, 2) }}</span>{% endif %}
+        <span class="chip-dark">{{ t.spend_short }} {{ p.spend|num(lang, 0) }}</span>
+      {% endif %}
+    </div>
+    {% if p %}{% set v = p.comparison.verdict %}{% set dot = {"winner": "", "loser": "bad", "no clear difference": "warn"}.get(v, "off") %}
+    <div class="cr-verdict"><span class="chip-dark" data-tip="{{ t.ci_tip }}: {{ p.comparison.ci[0]|num(lang, 2) }}–{{ p.comparison.ci[1]|num(lang, 2) }} · {{ p.network }}"><span class="dot {{ dot }}"></span> {{ t["vd_" ~ v.replace(" ", "_")] }}</span></div>
+    {% endif %}
+  </div>
+  <div class="cr-body">
+    <div class="cr-title"><a href="/runs/{{ c.rid|qp }}/exports/{{ c.file|q }}">{{ c.rec.concept }}</a></div>
+    <div class="cr-sub" title="{{ c.rec.ad_name or c.file }}">{{ c.short_label }} · {{ c.rid }}</div>
+    <div class="badges">
+      {{ m.qa_badge(c.rec.status, t) }}
+      {{ m.review_badge(c.review, t) }}
+      {% if not p and c.rec.creative_id %}<span class="badge dashed" data-tip="{{ t.no_perf_tip }}">{{ t.no_perf }}</span>{% endif %}
+      {{ m.tag_chips(c, t) }}
+    </div>
+  </div>
+</article>

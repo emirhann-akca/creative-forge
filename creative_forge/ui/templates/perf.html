@@ -1,25 +1,98 @@
 {% extends "base.html" %}
-{% block title %}Performance - creative-forge{% endblock %}
+{% import "_icons.html" as ic %}
+{% import "_macros.html" as m %}
+{% block title %}{{ t.nav_perf }}{% endblock %}
 {% block body %}
-<section>
-  <h1>Creative performance</h1>
-  <form method="get" action="/perf" class="filters">
-    <label>Metric
-      <select name="metric">
-        {% for m in metrics %}<option value="{{ m }}"{% if m == metric %} selected{% endif %}>{{ m }}</option>{% endfor %}
-      </select>
-    </label>
-    <label>Minimum impressions for a verdict <input name="min_impressions" value="{{ min_impressions|int }}" inputmode="numeric"></label>
-    <button type="submit" class="secondary">Update</button>
-  </form>
-  {% if rep %}
-  <p class="muted">{{ rep.metric_label }}. Winner or loser only above {{ "{:,.0f}".format(rep.min_impressions) }} impressions on both
-  sides with non-overlapping 95% Wilson intervals; P(better) is the Bayesian probability of beating the rest of the pool.
-  Store: <code>{{ rep.store }}</code>.</p>
-  <div class="perf">{{ tables }}</div>
-  {% else %}
-  <p>No performance store yet at <code>{{ db }}</code>. Import data with <code>forge perf import meta|applovin|csv</code>
-  and register what you published with <code>forge perf register deliver/manifest.json</code>.</p>
-  {% endif %}
+<div class="page-head">
+  <h1>{{ t.pf_title }}</h1>
+  <span class="spacer"></span>
+  <a class="btn" href="/settings#import">{{ ic.icon("upload") }}{{ t.cmd_import_csv }}</a>
+  <p class="sub">{{ t.pf_sub }}</p>
+</div>
+
+<section class="card flush">
+  <header><h2>{{ t.pf_imports }}</h2><span class="spacer"></span><span class="muted small">{{ t.pf_imports_hint }}</span></header>
+  <div class="table-scroll pad"><table class="t">
+    <thead><tr><th>{{ t.col_network }}</th><th>{{ t.pf_source }}</th><th>{{ t.pf_last }}</th><th class="num">{{ t.pf_rows }}</th><th class="num">{{ t.pf_matched }}</th><th>{{ t.pf_period }}</th></tr></thead>
+    <tbody>
+    {% for key, label, kind, var in connections %}
+      {% set s = status.get(key) %}
+      <tr><td><b>{{ label }}</b></td><td class="soft">{% if s and s.level %}{{ t.pf_src_csv if s.level == "csv" else t.pf_src_api }}{% else %}{{ t.pf_src_api if kind == "api" else t.pf_src_csv }}{% endif %}</td>
+        <td>{% if s and s.at %}<span class="dot"></span> {{ s.at|when(lang) }}{% else %}<span class="dot off"></span> <span class="muted">{{ t.pf_never }}</span>{% endif %}</td>
+        <td class="num">{{ (s.stored if s and s.stored is defined else 0)|num(lang, 0) }}</td>
+        <td class="num">{% if s and s.stored %}{{ s.stored_matched|num(lang, 0) }}{% if s.unmatched %} <span class="badge warn" data-tip="{{ t.pf_unmatched_tip }}">{{ s.unmatched }} {{ t.pf_unmatched }}</span>{% endif %}{% else %}—{% endif %}</td>
+        <td class="muted">{% if s and s.first %}{{ s.first }} → {{ s.last }}{% else %}—{% endif %}</td></tr>
+    {% endfor %}
+    {% for net, s in status.items() if net not in connections|map("first") %}
+      <tr><td><b>{{ net }}</b></td><td class="soft">{{ t.pf_src_csv }}</td><td>{% if s.at %}<span class="dot"></span> {{ s.at|when(lang) }}{% endif %}</td>
+        <td class="num">{{ s.get("stored", 0)|num(lang, 0) }}</td><td class="num">{{ s.get("stored_matched", 0)|num(lang, 0) }}</td><td class="muted">{{ s.get("first") or "—" }} → {{ s.get("last") or "—" }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
 </section>
+
+{% if rep and rep.networks %}
+<div class="toolbar">
+  <nav class="seg" aria-label="{{ t.tn_metric }}">
+    {% for x in metrics %}<a href="{{ qlink('/perf', {'network': network, 'min_impressions': min_impressions|int|string}, metric=x) }}"{% if x == metric %} aria-current="true"{% endif %}>{{ t["m_" ~ x] }}</a>{% endfor %}
+  </nav>
+  <form method="get" action="/perf" class="filters">
+    <input type="hidden" name="metric" value="{{ metric }}">
+    {% if network %}<input type="hidden" name="network" value="{{ network }}">{% endif %}
+    <label class="soft small" for="min_impressions">{{ t.pf_min }}</label>
+    <input class="input num-input" id="min_impressions" name="min_impressions" value="{{ min_impressions|int }}" inputmode="numeric">
+    <button class="btn sm" type="submit">{{ t.apply }}</button>
+  </form>
+</div>
+<p class="muted small">{{ t.pf_rule|format(min_impressions|num(lang, 0)) }}</p>
+{% for net, d in rep.networks.items() %}
+  {% set tt = d.totals %}
+  <section class="card flush">
+    <header><h2>{{ net }}</h2><span class="muted small">{{ d.first }} → {{ d.last }}</span><span class="spacer"></span>
+      {% if d.unmatched.names %}<span class="badge warn" data-tip="{{ t.pf_unmatched_tip }}">{{ d.unmatched.names }} {{ t.pf_unmatched }}</span>{% endif %}</header>
+    <div class="pad">
+    <div class="kpis compact">
+      <div class="kpi"><div class="k">{{ t.kpi_creatives }}</div><div class="v">{{ tt.creatives }}</div></div>
+      <div class="kpi"><div class="k">{{ t.col_impressions }}</div><div class="v">{{ tt.get("impressions", 0)|num(lang, 0) }}</div></div>
+      <div class="kpi"><div class="k">{{ t.col_installs }}</div><div class="v">{{ tt.get("installs", 0)|num(lang, 0) }}</div></div>
+      <div class="kpi"><div class="k">IPM</div><div class="v">{{ tt.get("ipm")|num(lang, 2) }}</div></div>
+      <div class="kpi"><div class="k">{{ t.col_spend }}</div><div class="v">{{ tt.get("spend", 0)|num(lang, 0) }}</div></div>
+    </div>
+    <h3 class="h3">{{ t.pf_by_creative }}</h3>
+    <div class="table-scroll"><table class="t">
+      {% set has3 = d.creatives|rejectattr("hook_rate", "none")|list %}{% set has2 = d.creatives|rejectattr("hook_rate_2s", "none")|list %}{% set hasc = d.creatives|rejectattr("completion", "none")|list %}
+      <thead><tr><th>{{ t.col_creative }}</th><th class="num">{{ t.col_impressions }}</th><th class="num">{{ t.col_installs }}</th><th class="num">IPM</th><th class="num">CTR (%)</th><th class="num">CPI</th>{% if has3 %}<th class="num">{{ t.m_hook_rate }} (%)</th>{% endif %}{% if has2 %}<th class="num">{{ t.m_hook_rate_2s }} (%)</th>{% endif %}{% if hasc %}<th class="num">{{ t.m_completion }} (%)</th>{% endif %}<th>{{ t.col_ci }} ({{ t["m_" ~ rep.metric] }})</th><th class="num">P(&gt;)</th><th>{{ t.col_verdict }}</th></tr></thead>
+      <tbody>{% for c in d.creatives %}{% set cm = c.comparison %}
+        {% set a = c.ad_name|adname %}{% set k = lookup.get(c.creative_id) %}
+        <tr><td class="adcell" title="{{ c.ad_name }}">{% if a %}{% if k and k.key %}<a href="/runs/{{ k.rid|qp }}/exports/{{ k.file|q }}"><b>{{ a.concept }}</b></a>{% else %}<b>{{ a.concept }}</b>{% endif %} <span class="muted">{{ a.label }} · {{ a.format }}</span>
+            <div class="muted small"><span class="mono">{{ a.id }}</span> · {{ a.spec }}{% if not c.registered %} <span class="badge dashed" data-tip="{{ t.pf_unregistered_tip }}">{{ t.pf_unregistered }}</span>{% endif %}</div>
+            {% else %}<span class="mono small">{{ c.ad_name }}</span>{% endif %}</td>
+          <td class="num">{{ c.impressions|num(lang, 0) }}</td><td class="num">{{ c.installs|num(lang, 0) }}</td><td class="num">{{ c.ipm|num(lang, 2) }}</td>
+          <td class="num">{{ c.ctr|num(lang, 2) }}</td><td class="num">{{ c.cpi|num(lang, 2) }}</td>{% if has3 %}<td class="num">{{ c.hook_rate|num(lang, 2) }}</td>{% endif %}{% if has2 %}<td class="num">{{ c.hook_rate_2s|num(lang, 2) }}</td>{% endif %}{% if hasc %}<td class="num">{{ c.completion|num(lang, 2) }}</td>{% endif %}
+          <td class="muted">{{ cm.ci[0]|num(lang, 2) }}–{{ cm.ci[1]|num(lang, 2) }}{{ unit }}</td><td class="num">{{ cm.p_better|prob(lang) }}</td><td>{{ m.verdict_badge(cm, t, lang, unit) }}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    <h3 class="h3">{{ t.pf_by_tag }}</h3>
+    {% if d.tags %}
+    <div class="table-scroll"><table class="t">
+      <thead><tr><th>{{ t.pf_dimension }}</th><th>{{ t.pf_value }}</th><th class="num">{{ t.kpi_creatives }}</th><th class="num">{{ t.col_impressions }}</th><th class="num">{{ t["m_" ~ rep.metric] }}</th><th>{{ t.col_ci }}</th><th>{{ t.pf_rest }}</th><th class="num">P(&gt;)</th><th>{{ t.col_verdict }}</th></tr></thead>
+      <tbody>{% for g in d.tags %}{% set cm = g.comparison %}
+        <tr><td class="soft">{{ g.dimension }}</td><td><b>{{ g.value }}</b></td><td class="num">{{ g.creatives }}</td><td class="num">{{ g.impressions|num(lang, 0) }}</td>
+          <td class="num">{{ cm.value|num(lang, 2) }}</td><td class="muted">{{ cm.ci[0]|num(lang, 2) }}–{{ cm.ci[1]|num(lang, 2) }}</td>
+          <td class="soft">{{ cm.rest|num(lang, 2) }} <span class="muted">({{ g.rest_creatives }})</span></td><td class="num">{{ cm.p_better|prob(lang) }}</td><td>{{ m.verdict_badge(cm, t, lang, unit) }}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    {% else %}<p class="muted">{{ t.pf_no_tags }} <code>forge perf register deliver/manifest.json</code></p>{% endif %}
+    </div>
+  </section>
+{% endfor %}
+{% else %}
+<section class="card"><div class="empty">
+  <div class="ic">{{ ic.icon("db") }}</div>
+  <h3>{{ t.pf_empty }}</h3>
+  <p>{{ t.pf_empty_bd }}</p>
+  <a class="btn primary" href="/settings#import">{{ ic.icon("upload") }}{{ t.st_perf_btn }}</a>
+  <p class="muted small">{{ t.or_cli }} <code>forge perf import meta|applovin|csv</code> · <code>forge perf register deliver/manifest.json</code><br>{{ t.pf_store }} <code>{{ db }}</code></p>
+</div></section>
+{% endif %}
 {% endblock %}

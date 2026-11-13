@@ -1,0 +1,57 @@
+{# Control and variants of one test cell. Needs r (cells.CellResult), lookup, t, lang, m. #}
+{%- set unit = "" if r.cell.metric == "ipm" else "%" -%}
+{%- set rule = r.cell.rule -%}
+<div class="table-scroll">
+<table class="t cell-table">
+  <thead><tr>
+    <th>{{ t.col_creative }}</th>
+    <th class="num">{{ t.col_installs }}</th>
+    <th style="min-width:150px">{{ t.tc_sufficiency }}</th>
+    <th class="num">{{ t["m_" ~ r.cell.metric] }}</th>
+    <th style="min-width:130px">{{ t.col_ci }}</th>
+    <th class="num">{{ t.tc_lift }}</th>
+    <th class="num" data-tip="{{ t.p_better_tip }}">P(&gt;)</th>
+    <th>{{ t.col_verdict }}</th>
+  </tr></thead>
+  <tbody>
+  {% macro who(cid, label) -%}
+    {%- set k = lookup.get(cid) -%}
+    <div class="who"><span class="lbl">{{ label }}</span>
+      {% if k and k.key %}<a href="/runs/{{ k.rid|qp }}/exports/{{ k.file|q }}">{{ k.concept }}</a>{% elif k %}<b>{{ k.concept or cid }}</b>{% else %}<b class="mono">{{ cid }}</b>{% endif %}
+      <div class="muted small"><span class="mono">{{ cid }}</span>{% if k and k.format %} · {{ k.format }}{% endif %}{% if k and k.variant %} · {{ k.variant }}{% endif %}</div></div>
+  {%- endmacro %}
+  {% set a = r.control %}
+  <tr class="control-row">
+    <td>{{ who(a.creative_id, t.tc_control) }}</td>
+    <td class="num">{{ a.installs|num(lang, 0) }}</td>
+    <td>{% set pct = [a.installs / rule.decide_installs, 1]|min if rule.decide_installs else 1 %}
+      <div class="bar suff" data-tip="{{ t.tc_suff_tip|format(rule.screen_installs, rule.decide_installs) }}"><span class="{{ 'good' if pct >= 1 else '' }}" style="width:{{ (pct * 100)|round(1) }}%"></span><i class="mark" style="left:{{ (rule.screen_installs / rule.decide_installs * 100)|round(1) }}%"></i></div>
+      <div class="muted small">{{ t.tc_sufficient if a.installs >= rule.decide_installs else "" }}{% if a.installs >= rule.decide_installs %} · {% endif %}{{ a.installs|num(lang, 0) }} / {{ rule.decide_installs }}</div></td>
+    <td class="num">{{ a.rate|num(lang, 2) }}</td>
+    <td>{% if a.n %}{{ m.ci_strip(a.ci[0], a.ci[1], a.rate, r.ci_max, "ctl") }}<div class="muted small">{{ a.ci[0]|num(lang, 2) }}–{{ a.ci[1]|num(lang, 2) }}{{ unit }}</div>{% else %}<span class="muted">—</span>{% endif %}</td>
+    <td class="num muted">—</td><td class="num muted">—</td>
+    <td><span class="badge outline">{{ t.tc_control }}</span></td>
+  </tr>
+  {% for o in r.outcomes %}
+  {% set a = o.arm %}
+  <tr>
+    <td>{{ who(a.creative_id, t.tc_variant ~ " " ~ loop.index) }}</td>
+    <td class="num">{{ a.installs|num(lang, 0) }}</td>
+    <td>
+      <div class="bar suff" data-tip="{{ t.tc_suff_tip|format(rule.screen_installs, rule.decide_installs) }}"><span class="{{ 'bad' if o.verdict == 'kill_early' else ('good' if o.progress >= 1 else ('warn' if o.stage == 'screened' else '')) }}" style="width:{{ (o.progress * 100)|round(1) }}%"></span><i class="mark" style="left:{{ (rule.screen_installs / rule.decide_installs * 100)|round(1) }}%"></i></div>
+      <div class="muted small">{% if r.cell.status == "draft" %}{{ t.tc_not_started }}{% elif o.verdict == "kill_early" %}{{ t.tc_dropped_early }}{% elif o.stage == "decided" %}{{ t.tc_sufficient }}{% elif o.stage == "screened" %}{{ t.tc_screened }}{% else %}{{ t.tc_waiting }}{% endif %} · {{ a.installs|num(lang, 0) }} / {{ rule.decide_installs }}</div>
+    </td>
+    <td class="num">{{ a.rate|num(lang, 2) }}</td>
+    <td>{% if a.n %}{{ m.ci_strip(a.ci[0], a.ci[1], a.rate, r.ci_max) }}<div class="muted small">{{ a.ci[0]|num(lang, 2) }}–{{ a.ci[1]|num(lang, 2) }}{{ unit }}</div>{% else %}<span class="muted">—</span>{% endif %}</td>
+    <td class="num">{% if o.lift is not none %}<span class="{{ 'up' if o.lift > 0 else 'down' }}">{{ (o.lift * 100)|pct(lang, 1, true) }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+    <td class="num">{{ o.p_better|prob(lang) }}</td>
+    <td>{% if r.cell.status == "draft" %}<span class="badge dashed">{{ t.cs_draft }}</span>
+        {% elif o.verdict == "pending" %}
+          <div class="pending"><b>{{ t.tc_more|format(o.installs_missing|num(lang, 0)) }}</b>
+          <div class="muted small">{{ t.tc_to_screen if o.next_threshold == rule.screen_installs else t.tc_to_decide }}</div></div>
+        {% else %}{{ m.outcome_badge(o, t) }}{% endif %}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>

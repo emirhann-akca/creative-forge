@@ -1,0 +1,14 @@
+{# Approve / reject one export; posts to the same review.decide as `forge review`. Needs run, c, t, view. #}
+<form class="review-form" hx-post="/runs/{{ run.rid|qp }}/review" hx-target="closest article" hx-swap="outerHTML">
+  <input type="hidden" name="token" value="{{ token }}">
+  <input type="hidden" name="file" value="{{ c.file }}">
+  {% if view %}<input type="hidden" name="view" value="{{ view }}">{% endif %}
+  <div class="field"><label for="note-{{ c.rec.creative_id or loop_id }}">{{ t.rv_note }}</label>
+    <textarea class="input" id="note-{{ c.rec.creative_id or loop_id }}" name="note" rows="2" placeholder="{{ t.rv_note_ph }}"></textarea></div>
+  <div class="field"><label for="who-{{ c.rec.creative_id or loop_id }}">{{ t.rv_reviewer }}</label>
+    <input class="input" id="who-{{ c.rec.creative_id or loop_id }}" name="reviewer" placeholder="{{ t.rv_reviewer_ph }}" autocomplete="name"></div>
+  <div class="row">
+    <button class="btn primary" type="submit" name="decision" value="approve">{{ t.rv_btn_approve }}</button>
+    <button class="btn danger" type="submit" name="decision" value="reject">{{ t.rv_btn_reject }}</button>
+  </div>
+</form>
