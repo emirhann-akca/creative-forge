@@ -118,7 +118,7 @@ def strip_blobs(text: str) -> str:
     return _BLOB.sub("data:;base64,", text)
 
 
-_SCRIPT_BODY = re.compile(r"(<script\b[^>]*>).*?(</script\s*>)", re.I | re.S)
+_SCRIPT_BODY = re.compile(r"(<script\b[^>]*>).*?(</script\b[^>]*>)", re.I | re.S)
 
 
 def resources(html: str) -> list[tuple[str, str]]:
@@ -152,7 +152,7 @@ def _store_urls(code: str) -> list[str]:
 
 
 def _store_url_ok(url: str) -> bool:
-    if "play.google.com" in url:
+    if (urlsplit(url).hostname or "").lower() == "play.google.com":
         pkg = url.split("id=", 1)[1] if "id=" in url else ""
         return bool(re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+", pkg))
     return bool(re.search(r"/id\d{6,}", url))

@@ -95,8 +95,13 @@ def _run_status(exports: list[ExportRecord]) -> str:
 def load_run(root: Path, rid: str) -> RunInfo:
     if not rid or rid.startswith("/") or any(part in ("", ".", "..") for part in rid.split("/")):
         raise HTTPException(404, "no such run")
-    path = (root / rid).resolve()
-    if not path.is_relative_to(root.resolve()) or not (path / "report.json").is_file():
+    # rid comes from the URL: normalised, then required to stay inside --root (symlinks resolved)
+    base = os.path.realpath(root)
+    full = os.path.realpath(os.path.join(base, rid))
+    if not full.startswith(base if base.endswith(os.sep) else base + os.sep):
+        raise HTTPException(404, "no such run")
+    path = Path(full)
+    if not (path / "report.json").is_file():
         raise HTTPException(404, "no such run")
     try:
         exports = load_exports(path)
@@ -653,7 +658,7 @@ def create_app(
             if store.get(cell_id) is None:
                 raise HTTPException(404, "no such test") from e
             return test_view(request, cell_id, 409, error=str(e))
-        return RedirectResponse(f"/tests/{cell_id}", status_code=303)
+        return RedirectResponse(f"/tests/{int(cell_id)}", status_code=303)  # a local path, never another site
 
     # ------------------------------------------------------------------------------------------------ performance
     @app.get("/perf", response_class=HTMLResponse)
