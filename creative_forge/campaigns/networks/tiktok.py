@@ -49,7 +49,7 @@ def request_id(key: str) -> str:
 
 
 def md5(path: Any) -> str:
-    h = hashlib.md5()
+    h = hashlib.md5(usedforsecurity=False)  # TikTok's video_signature is an MD5 checksum, not a security use
     with open(path, "rb") as f:
         for chunk in iter(lambda: f.read(1 << 20), b""):
             h.update(chunk)

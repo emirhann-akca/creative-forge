@@ -461,7 +461,7 @@ class MockNetwork:
             if "video_file" not in files:
                 raise self._tt_error("video_file: Missing data for required field.")
             _, data = files["video_file"]
-            if hashlib.md5(data).hexdigest() != f.get("video_signature"):
+            if hashlib.md5(data, usedforsecurity=False).hexdigest() != f.get("video_signature"):
                 raise self._tt_error("video_signature does not match the file", 40911)
             oid = self._tt_new("video", f | {"_bytes": len(data)}, "video_id")
             return self._tt([{"video_id": oid, "file_name": f.get("file_name"), "size": len(data)}])
