@@ -440,10 +440,11 @@ def test_csv_upload_imports_through_the_same_code_as_the_cli(tmp_path, root):
     assert "TikTok" in imports and "CSV" in imports
 
 
-def test_campaigns_is_a_placeholder_without_any_write(client):
+def test_campaigns_page_starts_empty_and_writes_nothing_on_a_get(client, tmp_path):
     page = client.get("/campaigns").text
-    assert "Salt okunur kampanya ağacı" in page and "Yazma ve otomasyon" in page
-    assert 'method="post"' not in page and "hx-post" not in page
+    assert (
+        "Kampanya yapılandırması yok" in page and "Henüz kampanya yok" in page
+    )  # tests/test_campaigns_ui.py: the rest
 
 
 def test_playables_page_reads_check_output(client, root):

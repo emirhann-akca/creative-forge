@@ -1,0 +1,53 @@
+# forge campaign: an app-install campaign on Meta, TikTok and Google Ads from approved creatives.
+#
+#   forge campaign plan examples/campaign.yaml      # dry run: every object and payload, nothing is sent
+#   forge campaign create examples/campaign.yaml    # everything PAUSED; a re-run creates nothing twice
+#   forge campaign activate <ref> --confirm "YAYINA AL 20.00 USD"   # the separate step that can spend
+#
+# As shipped this file is refused on purpose: the store URL below is a placeholder (DOLDUR = "fill in").
+# Every id below is synthetic and every network is in mock mode (the local mock network, no account, no money).
+version: 1
+name: sort-puzzle-tr
+creatives: ../out/deliver            # a `forge publish` folder: approved, QA-clean exports only
+platform: android                    # android or ios; must match the store URL
+store_url: https://play.google.com/store/apps/details?id=DOLDUR
+countries: [TR]
+currency: USD                        # budgets are in the ad account's currency; a mismatch is refused
+budget:
+  daily: 20                          # per campaign per network
+  total_cap: 200                     # -> 10 days; networks get the end date (Meta spend_cap, TikTok total budget)
+  # start: 2026-12-01                # default: tomorrow
+limits:                              # hard caps, checked at plan, create and activate
+  max_daily: 30
+  max_total: 300
+automation:
+  auto_pause: false                  # true: a killed ad and a campaign at its cap are paused by sync. Never scales.
+formats: ["9:16"]
+control: dust-blower                 # the test cell's control: a concept, creative id or ad name (default: first)
+# test_rule: {scale_pct: 20, kill_pct: 20, screen_installs: 50, decide_installs: 200, confidence: 0.95}
+networks:
+  meta:
+    mode: mock                       # mock | sandbox | live (live also needs --live)
+    ad_account: act_100200300
+    page_id: "100000000000001"
+    app_id: "200000000000002"        # the app's Meta app id (promoted_object.application_id)
+    message: Sort the shelves. Calm, quick, satisfying.
+    formats: ["9:16", "4:5"]
+  tiktok:
+    mode: mock
+    advertiser_id: "7000000000000000001"
+    app_id: "7100000000000000001"    # the app's id in TikTok App Management
+    location_ids: ["298795"]         # TikTok location id of Turkey
+    identity_type: CUSTOMIZED_USER
+    identity_id: identity-1
+    ad_text: Sort the shelves. Calm, quick, satisfying.
+  google:
+    mode: mock
+    customer_id: "1234567890"
+    # login_customer_id: "0987654321"   # the manager account, when access goes through one
+    headlines: [Sort the shelves, Calm puzzle]
+    descriptions: [A calm goods-sort puzzle you play in short breaks.]
+    location_ids: ["2792"]           # geoTargetConstants/2792 = Turkey
+    language_ids: ["1037"]           # languageConstants/1037 = Turkish
+    # target_install_cost: 0.40      # omitted: maximize installs without a target
+  applovin: {mode: manual}           # documented API, but no paused create: an upload pack instead

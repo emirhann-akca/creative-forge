@@ -14,7 +14,10 @@ Pages (Turkish by default, English with ``?lang=en``; the choice is remembered i
   install-based sufficiency.
 * **Performance**: ``forge perf report`` per creative and per tag, and the import status per network.
 * **Playables**: results of ``forge playable check --json`` saved under ``<root>/playables`` and the rules per network.
-* **Campaigns**: a placeholder; no network write call exists in this app.
+* **Campaigns** (Kampanya): ``forge campaign`` behind one primary button. The page shows the dry-run preview of a
+  campaign YAML under ``<root>/campaigns/``, "Kampanyayı hazırla (duraklatılmış)" creates everything PAUSED, each
+  campaign has its own "Yayına al" form that needs the typed phrase with the budget in it, and the status table is
+  synced from the networks. Mock mode is the default; a live network needs its own tick box.
 * **Settings**: network credentials present or missing (never their values), CSV import, folders, ``forge doctor``.
 
 Binds 127.0.0.1 unless ``--host`` says otherwise. Requests whose ``Host`` header is not a loopback name are refused
@@ -57,7 +60,7 @@ from creative_forge.ui.i18n import LANGS, T, fmt_date, fmt_num, fmt_pct, fmt_pro
 HERE = Path(__file__).resolve().parent
 TOKEN_HEADER = "X-Forge-Token"
 LOOPBACK = frozenset({"127.0.0.1", "localhost", "::1"})
-SKIP_DIRS = {"inputs", "__pycache__", "node_modules", "playables"}
+SKIP_DIRS = {"inputs", "__pycache__", "node_modules", "playables", "campaigns"}
 LANG_COOKIE = "forge_lang"
 MAX_UPLOAD = 50 * 1024 * 1024
 # The networks of the settings page: how data gets in and which environment variable (if any) holds a credential.
@@ -69,6 +72,18 @@ CONNECTIONS = (
     ("google", "Google Ads", "csv", None),
     ("mintegral", "Mintegral", "csv", None),
 )
+
+
+# The networks of a config written by the Kampanya page: mock mode with synthetic ids, to be replaced by real ones.
+STARTER_NETWORKS: dict[str, Any] = {
+    "meta": {"mode": "mock", "ad_account": "act_100200300", "page_id": "100000000000001",
+             "app_id": "200000000000002", "message": ""},
+    "tiktok": {"mode": "mock", "advertiser_id": "7000000000000000001", "app_id": "7100000000000000001",
+               "location_ids": ["298795"], "identity_id": "identity-1", "ad_text": "Play now"},
+    "google": {"mode": "mock", "customer_id": "1234567890", "headlines": ["Play now"],
+               "descriptions": ["A short, calm puzzle."], "location_ids": ["2792"], "language_ids": ["1037"]},
+    "applovin": {"mode": "manual"},
+}  # fmt: skip
 
 
 @dataclass
@@ -212,6 +227,8 @@ def create_app(
     demo_out: Path | None = None,
     perf_db: Path | None = None,
     poster_cache: Path | None = None,
+    campaign_state: Path | None = None,
+    campaign_demo_cmd: list[str] | None = None,
 ) -> FastAPI:
     from creative_forge.perf.cells import CELL_METRICS, CellError, CellStore, Rule, evaluate
     from creative_forge.perf.store import default_db
@@ -236,6 +253,12 @@ def create_app(
     app.state.token = token
     app.state.demo = demo
     app.state.root = root
+    camp_demo_out = (root / "campaign-demo").resolve()
+    camp_demo = DemoJob(
+        campaign_demo_cmd or [sys.executable, "-m", "creative_forge", "campaign", "demo", "--out", str(camp_demo_out)],
+        camp_demo_out,
+    )
+    app.state.campaign_demo = camp_demo
 
     def db_path() -> Path:
         return Path(perf_db or default_db())
@@ -707,9 +730,205 @@ def create_app(
         return page(request, "playables.html", reports=reports, rules=rules, folder=folder)
 
     # -------------------------------------------------------------------------------------------------- campaigns
+    camp_dir = root / "campaigns"
+
+    def camp_state() -> Any:
+        from creative_forge.campaigns.state import CampaignState
+
+        return CampaignState(campaign_state)
+
+    def camp_configs() -> list[Path]:
+        if not camp_dir.is_dir():
+            return []
+        return sorted(p for p in camp_dir.iterdir() if p.suffix in (".yaml", ".yml") and p.is_file())
+
+    def camp_config(name: str) -> Path | None:
+        files = camp_configs()
+        if name:
+            return next((p for p in files if p.name == name), None)
+        return files[0] if files else None
+
+    def publish_dirs() -> list[str]:
+        found = []
+        for depth in ("*/manifest.json", "*/*/manifest.json", "*/*/*/manifest.json"):
+            found += [m.parent.relative_to(root).as_posix() for m in root.glob(depth)]
+        return sorted(set(found))
+
+    def camp_engine(live: bool = False) -> Any:
+        from creative_forge.campaigns.engine import CampaignEngine
+
+        return CampaignEngine(camp_state(), allow_live=live, perf_db=db_path())
+
+    def campaigns_view(request: Request, status_code: int = 200, config: str = "", **ctx: Any) -> HTMLResponse:
+        from creative_forge.campaigns.audit import AuditLog
+        from creative_forge.campaigns.config import CampaignConfigError, load_config
+        from creative_forge.campaigns.creatives import CreativeGateError
+        from creative_forge.campaigns.engine import confirmation_phrase
+        from creative_forge.campaigns.plan import build_plan
+        from creative_forge.campaigns.store_url import StoreUrlError
+        from creative_forge.campaigns.versions import VERSIONS
+
+        lang = lang_of(request)
+        st = camp_state()
+        chosen = camp_config(config)
+        plan = plan_error = cfg = None
+        if chosen is not None:
+            try:
+                cfg = load_config(chosen)
+                plan = build_plan(cfg, date.today()).to_dict(st)
+            except (CampaignConfigError, StoreUrlError, CreativeGateError, ValueError) as e:
+                plan_error = str(e)
+        recs = st.campaigns()
+        rows = [{"r": r, "phrase": confirmation_phrase(r, lang)} for r in recs]
+        audit = AuditLog(st.audit_path).verify()
+        live = bool(plan and any(n["mode"] == "live" for n in plan["networks"]))
+        return page(
+            request,
+            "campaigns.html",
+            status_code,
+            files=[p.name for p in camp_configs()],
+            chosen=chosen.name if chosen else "",
+            cfg=cfg,
+            plan=plan,
+            plan_error=plan_error,
+            rows=rows,
+            audit=audit,
+            audit_path=st.audit_path,
+            state_dir=st.dir,
+            camp_dir=camp_dir,
+            live=live,
+            versions=VERSIONS,
+            publish_dirs=publish_dirs(),
+            cdemo=camp_demo,
+            **ctx,
+        )
+
     @app.get("/campaigns", response_class=HTMLResponse)
-    def campaigns_page(request: Request) -> HTMLResponse:
-        return page(request, "campaigns.html", connections=CONNECTIONS)
+    def campaigns_page(request: Request, config: str = "") -> HTMLResponse:
+        return campaigns_view(request, config=config)
+
+    def camp_errors() -> tuple[type[BaseException], ...]:
+        from creative_forge.campaigns.config import CampaignConfigError
+        from creative_forge.campaigns.creatives import CreativeGateError
+        from creative_forge.campaigns.http import AmbiguousWrite, NetworkError
+        from creative_forge.campaigns.networks import SafetyError
+        from creative_forge.campaigns.store_url import StoreUrlError
+        from creative_forge.config import ConfigError
+
+        return (CampaignConfigError, CreativeGateError, NetworkError, AmbiguousWrite, SafetyError, StoreUrlError,
+                ConfigError, ValueError)  # fmt: skip
+
+    @app.post("/campaigns/prepare", response_class=HTMLResponse)
+    async def campaigns_prepare(request: Request) -> HTMLResponse:
+        from creative_forge.campaigns.config import load_config
+
+        form = await require_token(request)
+        name = str(form.get("config", ""))
+        path = camp_config(name)
+        if path is None:
+            raise HTTPException(404, "no such campaign config")
+        try:
+            with camp_engine(live=form.get("live") == "1") as eng:
+                rep = eng.create(load_config(path))
+        except camp_errors() as e:
+            return campaigns_view(request, 409, config=path.name, error=str(e))
+        created = sum(n.created for n in rep.networks)
+        existing = sum(n.existing + n.reconciled for n in rep.networks)
+        stopped = [(n.network, n.stopped) for n in rep.networks if n.stopped]
+        return campaigns_view(request, 200 if not stopped else 409, config=path.name, created=(created, existing),
+                              stopped=stopped, packs=rep.packs)  # fmt: skip
+
+    @app.post("/campaigns/activate", response_class=HTMLResponse)
+    async def campaigns_activate(request: Request) -> HTMLResponse:
+        from creative_forge.campaigns.config import load_config
+
+        form = await require_token(request)
+        name, ref = str(form.get("config", "")), str(form.get("ref", ""))
+        path = camp_config(name) if name else None
+        try:
+            cfg = load_config(path) if path else None
+            with camp_engine(live=form.get("live") == "1") as eng:
+                rec = eng.activate(ref, str(form.get("phrase", "")), cfg)
+        except camp_errors() as e:
+            return campaigns_view(request, 409, config=name, error=str(e), error_ref=ref)
+        return campaigns_view(request, config=name, done=("activated", rec.name))
+
+    @app.post("/campaigns/pause", response_class=HTMLResponse)
+    async def campaigns_pause(request: Request) -> HTMLResponse:
+        form = await require_token(request)
+        name, ref = str(form.get("config", "")), str(form.get("ref", ""))
+        try:
+            with camp_engine() as eng:  # pausing is always allowed, also on a live account
+                rec = eng.pause(ref, "paused from the UI")
+        except camp_errors() as e:
+            return campaigns_view(request, 409, config=name, error=str(e), error_ref=ref)
+        return campaigns_view(request, config=name, done=("paused", rec.name))
+
+    @app.post("/campaigns/sync", response_class=HTMLResponse)
+    async def campaigns_sync(request: Request) -> HTMLResponse:
+        form = await require_token(request)
+        name = str(form.get("config", ""))
+        try:
+            with camp_engine() as eng:  # reads, and pauses at most
+                results = eng.sync()
+        except camp_errors() as e:
+            return campaigns_view(request, 409, config=name, error=str(e))
+        return campaigns_view(request, config=name, done=("synced", str(len(results))))
+
+    @app.post("/campaigns/starter")
+    async def campaigns_starter(request: Request) -> Response:
+        import yaml
+
+        from creative_forge.campaigns.config import CampaignConfigError, parse_config
+        from creative_forge.campaigns.store_url import StoreUrlError, parse_store_url
+
+        form = await require_token(request)
+        deliver = str(form.get("deliver", ""))
+        url = str(form.get("store_url", "")).strip()
+        data: dict[str, Any] = {}
+        try:
+            if deliver not in publish_dirs():
+                raise ValueError("pick a `forge publish` folder")
+            listing = parse_store_url(url)
+            data = {
+                "version": 1,
+                "name": "kampanya-" + date.today().strftime("%Y%m%d"),
+                "creatives": f"../{deliver}",
+                "platform": listing.platform,
+                "store_url": url,
+                "countries": [c.strip().upper() for c in str(form.get("countries", "TR")).split(",") if c.strip()],
+                "currency": "USD",
+                "budget": {"daily": _float(form.get("daily"), -1), "total_cap": _float(form.get("total_cap"), -1)},
+                "limits": {
+                    "max_daily": _float(form.get("max_daily"), -1),
+                    "max_total": _float(form.get("max_total"), -1),
+                },
+                "automation": {"auto_pause": False},
+                "formats": ["9:16"],
+                "networks": STARTER_NETWORKS,
+            }
+            parse_config(data, camp_dir)
+        except (CampaignConfigError, StoreUrlError, ValueError) as e:
+            return campaigns_view(request, 422, starter_error=str(e), starter=dict(form))
+        camp_dir.mkdir(parents=True, exist_ok=True)
+        target = camp_dir / f"{data['name']}.yaml"
+        n = 2
+        while target.exists():
+            target = camp_dir / f"{data['name']}-{n}.yaml"
+            n += 1
+        header = "# forge campaign config written by the Kampanya page: mock mode. Put real ids here and set mode.\n"
+        target.write_text(header + yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8")
+        return RedirectResponse(f"/campaigns?config={quote(target.name)}", status_code=303)
+
+    @app.post("/campaigns/demo", response_class=HTMLResponse)
+    async def campaigns_demo(request: Request) -> HTMLResponse:
+        await require_token(request)
+        camp_demo.start()
+        return page(request, "_campaign_demo.html", cdemo=camp_demo)
+
+    @app.get("/campaigns/demo/status", response_class=HTMLResponse)
+    def campaigns_demo_status(request: Request) -> HTMLResponse:
+        return page(request, "_campaign_demo.html", cdemo=camp_demo)
 
     # --------------------------------------------------------------------------------------------------- settings
     def settings_view(request: Request, status_code: int = 200, **ctx: Any) -> HTMLResponse:

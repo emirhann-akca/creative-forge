@@ -1,0 +1,16 @@
+{% import "_icons.html" as ic -%}
+<div id="campaign-demo" class="demo" data-state="{{ cdemo.state }}" {% if cdemo.state == "running" %}hx-get="/campaigns/demo/status" hx-trigger="every 1s" hx-swap="outerHTML"{% endif %}>
+  {% if cdemo.state == "running" %}
+    <p class="row"><span class="badge warn"><span class="dot warn live"></span>{{ t.cp_demo_running }}</span></p>
+  {% elif cdemo.state == "done" %}
+    <p class="row"><span class="badge good">{{ t.cp_demo_done }}</span> <span class="muted small mono">{{ cdemo.out_dir }}</span></p>
+  {% elif cdemo.state == "failed" %}
+    <p class="row"><span class="badge bad">{{ t.cp_demo_failed }}</span> <span class="muted">{{ t.exit_code }} {{ cdemo.returncode }}</span></p>
+  {% endif %}
+  {% if cdemo.state != "running" %}
+    <form hx-post="/campaigns/demo" hx-target="#campaign-demo" hx-swap="outerHTML" class="row">
+      <button class="btn" type="submit">{{ ic.icon("play") }}{{ t.cp_demo_run }}</button>
+    </form>
+  {% endif %}
+  {% if cdemo.lines %}<pre class="log">{{ cdemo.lines|join("\n") }}</pre>{% endif %}
+</div>

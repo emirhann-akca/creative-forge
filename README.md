@@ -19,6 +19,8 @@ forge review out/puzzle-ads                 # approve / reject each export, with
 forge publish out/puzzle-ads --to deliver/  # only approved files; refuses on failed QA unless overridden
 forge perf import meta --account act_1 ...  # creative-level metrics from Meta / AppLovin / CSV into SQLite
 forge perf report --write-lessons           # IPM, CTR, CPI, hook rate per creative and tag, with intervals
+forge campaign create examples/campaign.yaml  # Meta / TikTok / Google Ads campaigns, all PAUSED; `activate` is apart
+forge campaign demo                         # render -> approve -> paused campaigns -> simulated delivery, on a mock network
 forge setup ffmpeg                          # pinned ffmpeg 9.0.2, SHA-256 verified, no admin rights
 forge doctor                                # ffmpeg, OCR, folders, ComfyUI, credentials; exit 1 on a blocker
 forge comfy check                           # a ComfyUI GPU worker: VRAM, missing Wan nodes and model files
@@ -38,11 +40,12 @@ forge comfy check                           # a ComfyUI GPU worker: VRAM, missin
 - **Human in the loop**: `forge review` records decisions against file hashes; `forge publish` copies only approved, QA-clean exports with a manifest.
 - **A performance loop**: deterministic creative IDs and ad names that round-trip, a tag taxonomy, `forge perf import` from Meta, AppLovin and CSV exports into SQLite, `forge perf report` with intervals (no winner on a small sample), and lessons that `forge ideate` retrieves.
 - **An ads app for choosing, not just making**: `forge ui` / `forge app` (Turkish by default, English with `?lang=en`) shows every export as a playable card with IPM, CTR, CPI, spend and a confidence badge, a concept → variant board, approve / reject bound to the file hash, and **test cells**: 2–4 variants against a control, a kill / scale rule locked when the test starts, and sufficiency counted in installs.
+- **Campaigns from approved creatives, paused by default**: `forge campaign` (and the UI's Kampanya page) turns a `forge publish` folder into app-install campaigns on Meta (Marketing API v27.0, Advantage+ app), TikTok (v1.3) and Google Ads (v26, App campaign), every object created PAUSED with an idempotency key, a dry-run preview of each request, a hash-chained audit log of every call, activation only by a typed phrase under per-campaign daily and total caps, refusal of placeholder store URLs, and kill / scale recommendations from the test cell's locked rule. Tested against a local mock of the three APIs only ([what ran where](#campaigns-created-paused-switched-on-by-a-typed-decision)).
 - **More exports per paid generation**: a variant matrix (hooks × segments × end cards × languages × formats) that pays once per hook, and `forge segments` to cut gameplay with PySceneDetect.
 - **Playables and licences**: `forge playable check|pack` against each network's published rules with a headless browser run, and a model licence registry that refuses non-commercial weights before any call.
 - **A GPU worker on the LAN**: Wan 2.1 first-last-frame and Wan 2.2 TI2V-5B through ComfyUI, with health, VRAM and model checks, resume by prompt id and an explicit cloud fallback (mock-tested; not yet run on a GPU).
 - **Runs on Windows 10/11, macOS (Apple Silicon) and Linux**: one-line installers that need no admin rights, a pinned ffmpeg, RapidOCR where Apple Vision is missing, and CI that installs the built wheel the way a user would on each OS, then runs the demo in a folder named `Çalışma Ş/İğ`.
-- 387 tests (about 1 min 45 s on an M4 Mac, most of it the headless-browser playable runs), run on Windows, macOS and Ubuntu with Python 3.11, 3.12 and 3.13; any text I/O that depends on the locale's encoding fails them. `forge demo` takes about 10 s.
+- 439 tests (about 2 min on an M4 Mac, most of it the headless-browser playable runs and two full demo renders), run on Windows, macOS and Ubuntu with Python 3.11, 3.12 and 3.13; any text I/O that depends on the locale's encoding fails them. `forge demo` takes about 10 s.
 
 ![Demo export frames](docs/img/demo-frames.png)
 
@@ -425,6 +428,62 @@ A rate's denominator counts only impressions from rows that report its numerator
 
 Cells live in the performance store (`test_cells` in `perf.sqlite`) and read `perf_rows` of their network from their first day on. Starting a cell stores the SHA-256 of its rule and refuses any later change to it; a started cell cannot be deleted, and a rule edited behind the app's back is reported as tampered. A draft counts no data. The logic is in [`perf/cells.py`](creative_forge/perf/cells.py) and reuses `perf.stats` and the report's aggregation.
 
+## Campaigns: created paused, switched on by a typed decision
+
+```bash
+forge campaign plan examples/campaign.yaml        # dry run: every object and request body; nothing is sent
+forge campaign create examples/campaign.yaml      # Meta, TikTok, Google Ads: everything PAUSED; re-runs create nothing
+forge campaign status                             # caps, schedule, last sync, the activation command
+forge campaign activate <plan>:meta --confirm "YAYINA AL 20.00 USD"   # the one step that can spend
+forge campaign sync                               # status, spend, per-creative delivery, kill / scale recommendations
+forge campaign pause <plan>:meta                  # always allowed
+forge campaign demo                               # the whole loop offline on the mock network (about 15 s)
+forge campaign audit --tail 5                     # verify the hash chain of the audit log
+```
+
+`forge ui` has the same under **Kampanya**: the dry-run preview with every request body, one primary button "Kampanyayı hazırla (duraklatılmış)", a "Yayına al" form per campaign that shows the daily budget, total cap and last day and needs the typed phrase, a status table synced from the networks with the recommendations, and a button that runs the demo. A config is a YAML file in `<root>/campaigns/`; the page writes a starter one (mock mode) from a store URL, a budget and a `forge publish` folder.
+
+**Safety rules, each enforced in code and covered by a test**
+
+| Rule | How |
+|---|---|
+| Everything is created paused | Meta `status=PAUSED`, TikTok `operation_status=DISABLE`, Google `status=PAUSED` (a new Google campaign defaults to ENABLED) on campaign, ad set / ad group and ad. After the last create the campaign is read back; one that is not paused is paused at once and the run fails. |
+| Activation is separate and typed | `YAYINA AL <daily> <currency>` (or `ACTIVATE …`) must be typed; the daily budget and total cap are checked against `limits` again (the config's and the ones stored at create, whichever is lower); the network's budget, currency and spend are read back, and a budget changed outside forge refuses activation. Ads and ad sets are switched on first, the campaign last. |
+| Caps reach the network | `limits.max_daily` / `max_total` are required. The schedule is `floor(total_cap / daily)` days and every network gets the end date; Meta also gets `spend_cap` (when the cap is at least Meta's ~100 USD minimum) and TikTok a `BUDGET_MODE_TOTAL` campaign budget. Google App campaigns have no total budget, so there the end date and `sync` hold it. |
+| No placeholder store URL | `https` on `play.google.com/store/apps/details?id=<package>` or `apps.apple.com/…/id<digits>`, no DOLDUR / TODO / TBD / FIXME / example / placeholder / xxx, and the platform must match. `plan --verify-store` also fetches the public listing. |
+| Only reviewed, QA-clean files | The source is a `forge publish` folder; each export is re-checked: parsable ad name, SHA-256 unchanged since approval, QA `pass`/`warn`, no failed check, not published with `--override`, a reviewer recorded. Excluded files are listed with the reason. |
+| Retries never double-create | Each object has a deterministic key (plan id + network + object) in its name as `[cf:<10 hex>]` and in a local journal (`campaigns.sqlite`). Only 429 / throttling and connections never established are retried; a read timeout, dropped connection or 5xx on a write stops the run with the object marked unknown, and the next run looks it up by key before creating anything. TikTok also gets the key as `request_id`. |
+| Exact preview | `plan` / the page list every object, its request body and whether it will be created, already exists, changed (shown, never updated) or will be looked up. |
+| Audit log | `audit.jsonl`: every API call (method, URL without secrets, request body, status, trimmed answer, time) and every decision, append-only, each record carrying the previous record's SHA-256; `forge campaign audit` names the first edited, deleted or reordered line. Tokens are redacted and secret-named keys are scrubbed. |
+| Recommendations, not actions | `sync` imports per-creative delivery into the performance store and judges the campaign's test cell (`perf/cells.py`, rule locked at activation): kill → "pause the ad", scale → "raise the daily budget by hand to X" (at most +20 %, never above `limits.max_daily`). With `automation.auto_pause: true` a killed ad and a campaign at its cap are paused automatically; scaling is never automatic. On Google one video of an App ad cannot be paused alone, so it stays a recommendation. |
+| Live needs an explicit switch | Creating or activating on a network in `mode: live` is refused unless `--live` is passed (CLI) or the live box is ticked (UI); reading, syncing and pausing need no switch. Credentials come from environment variables only, never the YAML. A re-run of `create` never touches a campaign it recorded before (an activated one stays active). |
+
+**Networks** (API versions and pages read on 14 Nov 2026; [`campaigns/versions.py`](creative_forge/campaigns/versions.py) keeps the URLs)
+
+| Network | API | What `create` makes | Sandbox |
+|---|---|---|---|
+| Meta | Marketing API **v27.0** (released 4 Nov 2026) | `OUTCOME_APP_PROMOTION` campaign with the budget on the campaign + ad set with `promoted_object` and Advantage+ audience, no placements (so Advantage+ placements): the three levers that make Meta report `ADVANTAGE_PLUS_APP` since `smart_promotion_type` was retired for creation in v25.0; per creative `advideos` upload, the video's thumbnail, an `INSTALL_MOBILE_APP` creative and an ad | sandbox ad account (refused if it has a payment method) |
+| TikTok | API for Business **v1.3** | `APP_PROMOTION` / `APP_INSTALL` campaign with a total budget, ad group (daily budget, schedule, `INSTALL` / `OCPM`), per creative a video upload with its MD5, the network's cover frame, a `SINGLE_VIDEO` ad | `sandbox-ads.tiktok.com` |
+| Google Ads | Google Ads API **v26** (14 Oct 2026; v26.1 and v26.2 are minor releases) | budget, `MULTI_CHANNEL` / `APP_CAMPAIGN` campaign with `appCampaignSetting`, location and language criteria, ad group, each video uploaded to YouTube through `YouTubeVideoUploadService` (unlisted, marked as generative content) and turned into an asset, one App ad with headlines, descriptions and the videos | test account (refused unless `customer.test_account` is true) |
+| AppLovin, Unity Ads, Mintegral | not called | each documents a campaign API ([AppLovin](https://support.applovin.com/en/growth/promoting-your-apps/api/axon-campaign-management-api), [Unity](https://docs.unity.com/en-us/user-acquisition/management/api-campaign-management), [Mintegral](https://helpcenter.mintegral.com/en/docs/create-ad-unit-api)), but none documents creating a campaign paused (AppLovin marks `status` "Ignored" on create; Unity's create body has no `paused` field), so `create` writes an upload pack instead: the approved files, `pack.json` with the campaign name, store URL, budget, caps and dates, and the steps to create it paused by hand | — |
+
+**Testing without money**
+
+- **Mock network** ([`campaigns/mock_server.py`](creative_forge/campaigns/mock_server.py)): one local HTTP server for `/meta`, `/tiktok` and `/google` that checks the auth header, required fields, enum values and references, applies each network's documented default when a status is left out (so a forgotten "paused" shows up as an object created active), honours TikTok's `request_id`, refuses Google's duplicate campaign names, and injects faults (429; 500 before; 500 or a dropped connection *after* the object was created). Its reporting endpoints serve simulated delivery: spend paces at 86–100 % of the daily budget and never past the cap, CPM is log-normal per day, the network concentrates impressions on the ads it likes, installs, clicks and 3-second views are binomial draws. `mode: mock` (the default) starts it in-process; `forge campaign mock-server` serves it on a port.
+- **Meta sandbox**: in your developer app's dashboard add the Marketing API product, open Marketing API → Tools and create the sandbox ad account (one per app; it has no payment method and never delivers). Generate a token with `ads_management` for it, export it as `CREATIVE_FORGE_META_ADS_TOKEN`, set `mode: sandbox` and the sandbox `act_…` id. Meta's own pages disagree on whether ads and creatives can be created in a sandbox account (the use-case page says yes, the app-review best-practices page says no), so a sandbox run may stop at the creative step; that is a finding, not a forge bug.
+- **Google Ads test account**: create a test manager account (a Google account not linked to production), create a client test account under it, use your production manager's developer token (pending or approved works with test accounts), and export `CREATIVE_FORGE_GOOGLE_ADS_DEVELOPER_TOKEN`, `…_CLIENT_ID`, `…_CLIENT_SECRET` and `…_REFRESH_TOKEN` (OAuth, `adwords` scope). Set `mode: sandbox`, `customer_id` to the client test account and `login_customer_id` to the test manager. Test accounts never serve ads; whether they accept YouTube video uploads is not documented.
+- **TikTok sandbox**: the developer portal's sandbox ad account and its token as `CREATIVE_FORGE_TIKTOK_TOKEN`; `mode: sandbox` sends to `sandbox-ads.tiktok.com` (the host third-party guides give; confirm it in the portal).
+- **`forge campaign demo`**: the demo spec is rendered with fake providers, QA runs, a scripted reviewer approves three exports and rejects one, `forge publish` delivers them, then plan → create on all three mock networks (Meta 11 objects, TikTok 8, Google 9, all paused) → create again (0 new) → one simulated day while paused (0 delivery rows) → typed activation → ten simulated days → sync → recommendations → pause → audit check. On an M4 Mac it takes about 12-15 s. The simulated truth makes one hook better and one format worse than the control, and the report says so: `scale` for the better creative on all three networks, `pause_ad` for the worse one on Meta, nothing applied automatically, simulated spend within the 400 USD cap.
+
+**What ran live and what ran against the mock**: nothing in this section has been run against a live or sandbox ad account. No token was used and no request left the machine: every create, status change, read and report in the tests and the demo went to the local mock network, which follows the request and response shapes of the pages above as read on 14 Nov 2026. Field names that the pages did not show in full (TikTok's report metrics, some Google REST field spellings) are the adapters' best reading of the official SDK models and reference pages, and a sandbox run is the next check.
+
+**To go live, per network** (each needs a person: accounts, reviews and tokens cannot be automated)
+
+- **Meta**: a Business portfolio that owns the ad account and the Facebook Page; a developer app with the Marketing API product; a system-user token with `ads_management` (and `ads_read` for `forge perf import`), the system user assigned to the ad account, the Page and the app; Advanced Access to `ads_management` through App Review and Business Verification if the app manages accounts it does not own; the mobile app registered as a Meta app with its store URLs, and that app id as `meta.app_id`.
+- **TikTok**: a TikTok For Business developer account and an app in the API for Business portal with the ad account, campaign, creative and reporting scopes approved; an advertiser authorization (OAuth) for the ad account; the app added in TikTok's App Management (its id is `tiktok.app_id`) and a custom identity for the ads.
+- **Google Ads**: a manager account, a developer token with Basic Access (an application to Google), an OAuth client and refresh token with the `adwords` scope, the customer linked under the manager; the app published in the store (App campaigns read it from there).
+- Then `mode: live` for that network, `forge campaign plan` and read it, `forge campaign create --live`, check the objects in the network's own UI, and only then `forge campaign activate … --live`.
+
 ## Playable ads: per-network check and packaging
 
 ```bash
@@ -485,6 +544,7 @@ The suite also checks `duration` (spec window), `loudness` (−14.3 LUFS ± 1 LU
 
 - Built around one studio's goods-sort puzzle ads. The defaults (end card, layout, judge rubric) reflect that.
 - The performance importers have only been run against fixtures, not live network APIs (see [Performance import](#performance-import)).
+- The campaign adapters (Meta, TikTok, Google Ads) have only run against the local mock network: no sandbox and no live account was used. AppLovin, Unity Ads and Mintegral get a manual upload pack because none of them documents creating a campaign paused.
 - The ComfyUI Wan video provider has not run on a GPU yet; it is tested against a mocked ComfyUI server only.
 - Playable checks follow the networks' published pages as read on 11 Nov 2026; Liftoff, Moloco and Mintegral's JS API could not be verified, and the browser run cannot reach a CTA that needs a finished level.
 - In this repo the Veo, Gemini Image, Lyria and judge providers are tested against mocked HTTP only. Their request shapes come from the production scripts, except Lyria, which follows Vertex AI's documented `:predict` shape because the October script for it was not kept. Gemini function calling, `text-embedding-005` and the ComfyUI provider were each run for real, as described above.
@@ -505,6 +565,8 @@ creative_forge/
   spec.py, pricing.py, ledger.py, cache.py, retry.py, config.py, generator.py
   providers/   base.py (interfaces), vertex.py (REST), comfyui.py (client + SDXL), comfyui_video.py (Wan), fake.py
   perf/        store.py (SQLite), meta.py, applovin.py, csvimport.py, stats.py, report.py, lessons.py, cells.py, commands.py
+  campaigns/   config.py, store_url.py, creatives.py (the gate), plan.py (keys, preview), engine.py, http.py, audit.py, state.py,
+               recommend.py, networks/ (meta.py, tiktok.py, google.py, manual.py), mock_server.py, delivery.py, demo.py, versions.py
   playable/    rules.py (per-network rules + sources), static.py, dynamic.py + stubs.js (Playwright), pack.py
   stages/      video.py (gameplay, hook, end card, assembly), audio.py (mix, master, mux), export.py
   qa/          media_checks.py, audio_checks.py, seam.py, ocr.py (+ ocr_vision.swift), judge.py, runner.py

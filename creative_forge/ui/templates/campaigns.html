@@ -3,28 +3,164 @@
 {% block title %}{{ t.nav_campaigns }}{% endblock %}
 {% block body %}
 <div class="page-head">
-  <h1>{{ t.nav_campaigns }}</h1><span class="badge dashed">{{ t.cp_badge }}</span>
+  <h1>{{ t.nav_campaigns }}</h1><span class="badge good">{{ ic.icon("lock") }} {{ t.cp_badge }}</span>
   <p class="sub">{{ t.cp_sub }}</p>
 </div>
-<div class="callout info">{{ ic.icon("info") }}<div>{{ t.cp_why }}</div></div>
-<div class="grid c2">
-  <section class="card">
-    <header><span class="step-ic">6</span><h2>{{ t.cp_r6 }}</h2><span class="spacer"></span><span class="badge outline">{{ t.cp_r6_when }}</span></header>
-    <p class="soft">{{ t.cp_r6_bd }}</p>
-    <ul class="ticks">{% for x in t.cp_r6_items %}<li>{{ x }}</li>{% endfor %}</ul>
-  </section>
-  <section class="card">
-    <header><span class="step-ic">7</span><h2>{{ t.cp_r7 }}</h2><span class="spacer"></span><span class="badge outline">{{ t.cp_r7_when }}</span></header>
-    <p class="soft">{{ t.cp_r7_bd }}</p>
-    <ul class="ticks">{% for x in t.cp_r7_items %}<li>{{ x }}</li>{% endfor %}</ul>
-  </section>
-</div>
-<section class="card flush">
+
+{% if error %}<div class="callout bad" role="alert">{{ ic.icon("alert") }}<div><b>{{ t.cp_error }}</b>{% if error_ref %} <span class="mono small">{{ error_ref }}</span>{% endif %}<div class="small">{{ error }}</div></div></div>{% endif %}
+{% if created %}<div class="callout info" role="status">{{ ic.icon("check") }}<div><b>{{ t.cp_created|format(created[0], created[1]) }}</b>
+  {% for p in packs or [] %}<div class="small">{{ t.cp_pack }} <code>{{ p }}</code></div>{% endfor %}</div></div>{% endif %}
+{% for net, why in stopped or [] %}<div class="callout bad" role="alert">{{ ic.icon("alert") }}<div><b>{{ t.cp_stopped|format(net) }}</b><div class="small">{{ why }}</div></div></div>{% endfor %}
+{% if done %}<div class="callout info" role="status">{{ ic.icon("check") }}<div><b>{{ t["cp_done_" ~ done[0]]|format(done[1]) }}</b></div></div>{% endif %}
+
+{% if not files %}
+<section class="card" id="starter">
+  <header><h2>{{ t.cp_config_none }}</h2></header>
+  <p class="soft small">{{ t.cp_config_none_bd }}</p>
+  {% if starter_error %}<div class="callout bad" role="alert">{{ ic.icon("alert") }}<div><b>{{ t.cp_error }}</b><div class="small">{{ starter_error }}</div></div></div>{% endif %}
+  {% if publish_dirs %}
+  <form method="post" action="/campaigns/starter">
+    <input type="hidden" name="token" value="{{ token }}">
+    <div class="form-grid">
+      <div class="field"><label for="store_url">{{ t.cp_store_url }}</label><input class="input" id="store_url" name="store_url" required value="{{ (starter or {}).get('store_url', '') }}" placeholder="https://play.google.com/store/apps/details?id=…"><span class="hint">{{ t.cp_store_hint }}</span></div>
+      <div class="field"><label for="deliver">{{ t.cp_deliver }}</label><select class="select" id="deliver" name="deliver">{% for d in publish_dirs %}<option value="{{ d }}">{{ d }}</option>{% endfor %}</select><span class="hint">{{ t.cp_deliver_hint }}</span></div>
+      <div class="field"><label for="countries">{{ t.cp_countries }}</label><input class="input" id="countries" name="countries" value="{{ (starter or {}).get('countries', 'TR') }}"></div>
+    </div>
+    <div class="form-grid">
+      <div class="field"><label for="daily">{{ t.cp_daily }} (USD)</label><input class="input" id="daily" name="daily" inputmode="decimal" value="{{ (starter or {}).get('daily', '20') }}"></div>
+      <div class="field"><label for="total_cap">{{ t.cp_total }} (USD)</label><input class="input" id="total_cap" name="total_cap" inputmode="decimal" value="{{ (starter or {}).get('total_cap', '200') }}"></div>
+      <div class="field"><label for="max_daily">{{ t.cp_max_daily }}</label><input class="input" id="max_daily" name="max_daily" inputmode="decimal" value="{{ (starter or {}).get('max_daily', '30') }}"></div>
+      <div class="field"><label for="max_total">{{ t.cp_max_total }}</label><input class="input" id="max_total" name="max_total" inputmode="decimal" value="{{ (starter or {}).get('max_total', '300') }}"></div>
+    </div>
+    <div class="form-actions"><span class="muted small">{{ t.cp_starter_hint }}</span><button class="btn" type="submit">{{ ic.icon("plus") }}{{ t.cp_starter }}</button></div>
+  </form>
+  {% else %}
+  <div class="empty compact"><div class="ic">{{ ic.icon("film") }}</div><h3>{{ t.cp_no_deliver }}</h3>
+    <p><code>forge review out/&lt;run&gt;</code> → <code>forge publish out/&lt;run&gt; --to {{ root }}/deliver</code></p>
+    <a class="btn sm" href="/creatives?review=pending">{{ t.nav_creatives }}</a></div>
+  {% endif %}
+</section>
+{% else %}
+
+<section class="card">
+  <header><h2>{{ t.cp_config }}</h2></header>
+  <form method="get" action="/campaigns" class="row">
+    <label class="sr-only" for="config">{{ t.cp_config }}</label>
+    <select class="select" id="config" name="config">{% for f in files %}<option value="{{ f }}"{% if f == chosen %} selected{% endif %}>{{ f }}</option>{% endfor %}</select>
+    <button class="btn sm" type="submit">{{ t.apply }}</button>
+    <span class="muted small mono">{{ camp_dir }}</span>
+  </form>
+  {% if plan %}
+  <div class="kpis">
+    <div class="kpi"><div class="k">{{ t.cp_daily }}</div><div class="v">{{ plan.daily|num(lang, 2) }} {{ plan.currency }}</div><div class="d">{{ t.cp_limit }} {{ plan.limits.max_daily|num(lang, 2) }}</div></div>
+    <div class="kpi"><div class="k">{{ t.cp_total }}</div><div class="v">{{ plan.total_cap|num(lang, 2) }} {{ plan.currency }}</div><div class="d">{{ t.cp_limit }} {{ plan.limits.max_total|num(lang, 2) }}</div></div>
+    <div class="kpi"><div class="k">{{ t.cp_window }}</div><div class="v">{{ plan.days }} {{ t.cp_days }}</div><div class="d">{{ plan.start }} – {{ plan.end }}</div></div>
+    <div class="kpi"><div class="k">{{ t.cp_store }}</div><div class="v">{{ "Google Play" if plan.platform == "android" else "App Store" }}</div><div class="d mono">{{ plan.app_id }} · {{ t.cp_store_ok }}</div></div>
+  </div>
+  <p class="soft small">{{ t.cp_auto_on if plan.auto_pause else t.cp_auto_off }}</p>
+  <form method="post" action="/campaigns/prepare" class="form-actions">
+    <input type="hidden" name="token" value="{{ token }}">
+    <input type="hidden" name="config" value="{{ chosen }}">
+    <span class="muted small">{{ t.cp_prepare_hint }}</span>
+    <span class="row">
+      {% if live %}<label class="small"><input type="checkbox" name="live" value="1" required> {{ t.cp_live_ok }}</label>{% endif %}
+      <button class="btn primary" type="submit">{{ ic.icon("lock") }}{{ t.cp_prepare }}</button>
+    </span>
+  </form>
+  {% elif plan_error %}
+  <div class="callout bad" role="alert">{{ ic.icon("alert") }}<div><b>{{ t.cp_plan_error }}</b><div class="small">{{ plan_error }}</div></div></div>
+  {% endif %}
+</section>
+
+{% if plan %}
+<section class="card flush" id="preview">
   <header><h2>{{ t.cp_preview }}</h2><span class="spacer"></span><span class="muted small">{{ t.cp_preview_hint }}</span></header>
-  <div class="table-scroll pad"><table class="t ghost-table">
-    <thead><tr>{% for h in t.cp_cols %}<th{% if not loop.first %} class="num"{% endif %}>{{ h }}</th>{% endfor %}</tr></thead>
-    <tbody><tr><td colspan="{{ t.cp_cols|length }}"><div class="empty compact"><div class="ic">{{ ic.icon("campaigns") }}</div><h3>{{ t.cp_empty }}</h3><p>{{ t.cp_empty_bd }}</p>
-      <a class="btn sm" href="/perf">{{ t.nav_perf }}</a></div></td></tr></tbody>
+  {% for n in plan.networks %}
+  <div class="pad">
+    <h3>{{ n.network }} <span class="badge {{ 'bad' if n.mode == 'live' else ('warn' if n.mode == 'sandbox' else 'outline') }}">{{ t["cp_mode_" ~ n.mode] }}</span>
+      <span class="muted small mono">{{ n.account }} · API {{ versions[n.network] }}</span></h3>
+    {% for note in n.notes %}<p class="muted small">{{ note }}</p>{% endfor %}
+    {% for p in n.problems %}<div class="callout bad">{{ ic.icon("alert") }}<div>{{ p }}</div></div>{% endfor %}
+  </div>
+  <div class="table-scroll pad"><table class="t">
+    <thead><tr><th>{{ t.cp_col_kind }}</th><th>{{ t.cp_col_what }}</th><th>{{ t.cp_col_state }}</th></tr></thead>
+    <tbody>{% for o in n.ops %}
+      <tr><td class="mono small">{{ o.kind }}</td><td class="small">{{ o.summary }}<details><summary class="muted small">{{ t.cp_payload }}</summary><pre class="log">{{ o.method }} {{ o.path }}
+{{ o.payload|tojson(indent=2) }}</pre></details></td>
+        <td>{% if o.state == "create" %}<span class="badge info">+ {{ t.cp_st_create }}</span>{% elif o.state == "exists" %}<span class="badge good">= {{ t.cp_st_exists }}</span>{% elif o.state == "changed" %}<span class="badge warn">~ {{ t.cp_st_changed }}</span>{% else %}<span class="badge warn">? {{ t.cp_st_reconcile }}</span>{% endif %}
+          {% if o.remote_id %}<div class="mono small muted">{{ o.remote_id }}</div>{% endif %}</td></tr>
+    {% endfor %}</tbody>
   </table></div>
+  {% endfor %}
+  {% if plan.manual %}
+  <div class="pad"><h3>{{ t.cp_manual }}</h3><p class="soft small">{{ t.cp_manual_bd }}</p>
+    <ul class="ticks">{% for m in plan.manual %}<li><b>{{ m.network }}</b>: {{ m.creatives|length }} {{ t.cp_files }}. <span class="small">{{ m.reason }}</span> <a class="small" href="{{ m.doc }}" rel="noreferrer" target="_blank">{{ t.cp_doc }}</a></li>{% endfor %}</ul></div>
+  {% endif %}
+  {% if plan.excluded %}
+  <div class="pad"><h3>{{ t.cp_excluded }}</h3><ul class="ticks">{% for e in plan.excluded %}<li class="small"><span class="mono">{{ e.file }}</span>: {{ e.reason }}</li>{% endfor %}</ul></div>
+  {% endif %}
+</section>
+{% endif %}
+{% endif %}
+
+<section class="card flush" id="status">
+  <header><h2>{{ t.cp_status }}</h2><span class="spacer"></span>
+    <form method="post" action="/campaigns/sync" class="row"><input type="hidden" name="token" value="{{ token }}"><input type="hidden" name="config" value="{{ chosen }}">
+      <button class="btn sm" type="submit"{% if not rows %} disabled{% endif %}>{{ ic.icon("db") }}{{ t.cp_sync }}</button></form></header>
+  {% if rows %}
+  <div class="table-scroll pad"><table class="t">
+    <thead><tr>{% for h in t.cp_cols %}<th{% if loop.index > 4 %} class="num"{% endif %}>{{ h }}</th>{% endfor %}</tr></thead>
+    <tbody>{% for row in rows %}{% set r = row.r %}{% set s = r.last_sync %}
+      <tr>
+        <td><b>{{ r.network }}</b><div class="muted small">{{ t["cp_mode_" ~ r.mode] }}</div></td>
+        <td class="small">{{ r.name }}<div class="mono small muted">{{ r.ref }} · {{ r.campaign_id }}</div></td>
+        <td>{% if r.status == "ACTIVE" %}<span class="badge good"><span class="dot good live"></span>{{ t.cp_active }}</span>{% else %}<span class="badge outline">{{ t.cp_paused_badge }}</span>{% endif %}
+          {% if s and s.status and s.status != r.status %}<div class="small">{{ t.cp_network_says }} {{ s.status }}</div>{% endif %}</td>
+        <td class="small">{{ r.start }} – {{ r.end_day }}</td>
+        <td class="num">{{ r.daily|num(lang, 2) }}</td>
+        <td class="num">{{ r.total_cap|num(lang, 2) }}</td>
+        <td class="num">{% if s %}{{ (s.spend or 0)|num(lang, 2) }}{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td class="num">{% if s %}{{ (s.installs or 0)|num(lang, 0) }}{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td class="num small">{% if s %}{{ s.at|when(lang) }}{% else %}<span class="muted">{{ t.pf_never }}</span>{% endif %}</td>
+      </tr>
+      {% if s and s.recommendations %}<tr><td></td><td colspan="8"><b class="small">{{ t.cp_recs }}</b>
+        <ul class="ticks">{% for rec in s.recommendations %}<li class="small"><span class="badge {{ 'bad' if rec.action in ('pause_ad', 'pause_campaign') else ('good' if rec.action == 'scale' else 'outline') }}">{{ t["cp_rec_" ~ rec.action] }}</span>
+          <span class="mono">{{ rec.target[:64] }}</span>: {{ rec.reason }}{% if rec.applied %} <b>({{ t.cp_applied }})</b>{% endif %}</li>{% endfor %}</ul></td></tr>{% endif %}
+      <tr><td></td><td colspan="8">
+        {% if r.status == "PAUSED" %}
+        <form method="post" action="/campaigns/activate">
+          <input type="hidden" name="token" value="{{ token }}"><input type="hidden" name="config" value="{{ chosen }}"><input type="hidden" name="ref" value="{{ r.ref }}">
+          <p class="small"><b>{{ t.cp_activate }}:</b> {{ t.cp_activate_bd|format(r.daily|num(lang, 2) ~ " " ~ r.currency, r.total_cap|num(lang, 2) ~ " " ~ r.currency, r.end_day) }}</p>
+          <div class="row">
+            <label class="sr-only" for="phrase-{{ loop.index }}">{{ t.cp_type }}</label>
+            <input class="input mono" id="phrase-{{ loop.index }}" name="phrase" autocomplete="off" required placeholder="{{ row.phrase }}" aria-describedby="phrase-hint-{{ loop.index }}">
+            {% if r.mode == "live" %}<label class="small"><input type="checkbox" name="live" value="1" required> {{ t.cp_live_ok }}</label>{% endif %}
+            <button class="btn primary" type="submit">{{ ic.icon("play") }}{{ t.cp_activate }}</button>
+          </div>
+          <span class="hint small" id="phrase-hint-{{ loop.index }}">{{ t.cp_type_hint }} <code>{{ row.phrase }}</code></span>
+        </form>
+        {% else %}
+        <form method="post" action="/campaigns/pause" class="row"><input type="hidden" name="token" value="{{ token }}"><input type="hidden" name="config" value="{{ chosen }}"><input type="hidden" name="ref" value="{{ r.ref }}">
+          <button class="btn danger" type="submit">{{ ic.icon("x") }}{{ t.cp_pause }}</button><span class="muted small">{{ t.cp_pause_hint }}</span></form>
+        {% endif %}
+      </td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+  {% else %}
+  <div class="empty compact"><div class="ic">{{ ic.icon("campaigns") }}</div><h3>{{ t.cp_empty }}</h3><p>{{ t.cp_empty_bd }}</p></div>
+  {% endif %}
+  <p class="pad muted small">{{ t.cp_audit }}: {% if audit.ok %}{{ t.cp_audit_ok|format(audit.records) }}{% else %}<b>{{ t.cp_audit_bad|format(audit.problem) }}</b>{% endif %} · <code>{{ audit_path }}</code></p>
+</section>
+
+<section class="card" id="demo">
+  <header><h2>{{ t.cp_demo }}</h2><span class="spacer"></span><span class="badge outline">{{ t.cp_mode_mock }}</span></header>
+  <p class="soft small">{{ t.cp_demo_bd }}</p>
+  {% include "_campaign_demo.html" %}
+</section>
+
+<section class="card">
+  <header><h2>{{ t.cp_how }}</h2></header>
+  <ol class="small">{% for x in t.cp_how_items %}<li>{{ x }}</li>{% endfor %}</ol>
+  <p class="muted small">{{ t.or_cli }} <code>forge campaign plan|create|status|activate|pause|sync|demo</code></p>
 </section>
 {% endblock %}

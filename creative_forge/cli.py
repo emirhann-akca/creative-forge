@@ -1,5 +1,5 @@
 """``forge`` command line: plan, run, qa, demo, ideate, review, publish, setup, doctor, ui, licenses, perf,
-segments, playable, comfy."""
+segments, playable, campaign, comfy."""
 
 from __future__ import annotations
 
@@ -558,11 +558,13 @@ def build_parser() -> argparse.ArgumentParser:
     sg.add_argument("--json", action="store_true")
     sg.set_defaults(fn=cmd_segments)
 
+    from creative_forge.campaigns.commands import add_parser as add_campaign
     from creative_forge.perf.commands import add_parser as add_perf
     from creative_forge.playable.commands import add_parser as add_playable
 
     add_perf(sub)
     add_playable(sub)
+    add_campaign(sub)
 
     sc = sub.add_parser("comfy", help="ComfyUI GPU worker: health, VRAM, nodes and model files for a workflow")
     csub = sc.add_subparsers(dest="comfy_cmd", required=True)
