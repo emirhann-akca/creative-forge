@@ -184,6 +184,9 @@ def _drive(browser, origin, index, bundle, net, trace, render_timeout_s, settle_
         return r.abort()
 
     ctx.route("**/*", route)
+    # WebSockets bypass ctx.route: without this a playable could talk to any server, this machine's included
+    # (a local ComfyUI has no authentication). A routed socket that never calls connect_to_server() stays closed.
+    ctx.route_web_socket(lambda url: True, lambda ws: trace.external.append(ws.url))
     page = ctx.new_page()
     page.on("pageerror", lambda e: trace.errors.append(str(e)[:300]))
     page.on("console", lambda m: trace.console_errors.append(m.text[:300]) if m.type == "error" else None)

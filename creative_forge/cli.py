@@ -421,13 +421,17 @@ def cmd_doctor(a: argparse.Namespace) -> int:
 
 
 def cmd_comfy(a: argparse.Namespace) -> int:
-    from creative_forge.providers.comfyui import ComfyUIClient
+    from creative_forge.providers.comfyui import ComfyUIClient, ComfyUIError
     from creative_forge.providers.comfyui_video import check_worker
     from creative_forge.spec import ComfyUIVideoSpec
 
     settings = Settings.from_env()
     url = a.url or settings.comfyui_url
-    client = ComfyUIClient.from_env(url)
+    try:
+        client = ComfyUIClient.from_env(url)
+    except ComfyUIError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
     if a.spec:
         spec = _load(a.spec)
         targets = []

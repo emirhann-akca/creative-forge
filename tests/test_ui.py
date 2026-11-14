@@ -146,8 +146,11 @@ def test_foreign_host_headers_are_refused(root):
     assert TestClient(app, base_url="http://evil.example:8765").get("/").status_code == 400
     assert TestClient(app, base_url="http://localhost:8765").get("/").status_code == 200
     assert TestClient(app, base_url="http://[::1]:8765").get("/").status_code == 200
-    exposed = create_app(root, token=TOKEN, allowed_hosts=None)  # --host 0.0.0.0
-    assert TestClient(exposed, base_url="http://192.168.1.20:8765").get("/").status_code == 200
+    access = "network-access-token-for-tests"
+    exposed = create_app(root, token=TOKEN, allowed_hosts=None, access_token=access)  # --host 0.0.0.0
+    lan = TestClient(exposed, base_url="http://192.168.1.20:8765")
+    assert lan.get("/").status_code == 401  # any Host, but only with the printed access token
+    assert lan.get("/", headers={"Authorization": f"Bearer {access}"}).status_code == 200
 
 
 def test_demo_runs_in_the_background_and_reports_its_output(client):

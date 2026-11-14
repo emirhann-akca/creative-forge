@@ -32,6 +32,7 @@ code{font-size:12px}
 
 def _badge(s: Status | str) -> str:
     v = s.value if isinstance(s, Status) else s
+    v = html.escape(str(v), quote=True)
     return f'<span class="badge {v}">{v}</span>'
 
 
@@ -68,7 +69,9 @@ def _concept(cr: ConceptResult) -> str:
     if cr.pre_checks:
         parts.append("<p class='muted'>Generation checks</p>" + _checks_table(cr.pre_checks))
     for ex in cr.exports:
-        parts.append(f"<p><b>{ex.format}</b> <code>{html.escape(ex.path.name)}</code> {_badge(ex.status)}</p>")
+        parts.append(
+            f"<p><b>{html.escape(str(ex.format))}</b> <code>{html.escape(ex.path.name)}</code> {_badge(ex.status)}</p>"
+        )
         parts.append(_checks_table(ex.checks))
     if cr.master:
         it = cr.master.get("iterations", [])
@@ -81,8 +84,10 @@ def _concept(cr: ConceptResult) -> str:
             for i, x in enumerate(it)
         )
         parts.append(
-            f"<p class='muted'>Master loop ({cr.master.get('encoder')}, converged: {cr.master.get('converged')}); "
-            f"before: hook {b.get('hook_lufs')} / gameplay {b.get('gameplay_lufs')} LUFS</p>"
+            f"<p class='muted'>Master loop ({html.escape(str(cr.master.get('encoder')))}, "
+            f"converged: {html.escape(str(cr.master.get('converged')))}); "
+            f"before: hook {html.escape(str(b.get('hook_lufs')))} / gameplay "
+            f"{html.escape(str(b.get('gameplay_lufs')))} LUFS</p>"
             "<div class='scroll'><table><tr><th>round</th><th>gain dB</th><th>hook offset dB</th><th>limiter</th>"
             "<th>LUFS</th><th>true peak</th><th>hook</th><th>gameplay</th></tr>" + rows + "</table></div>"
         )

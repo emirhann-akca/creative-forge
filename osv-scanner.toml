@@ -1,0 +1,8 @@
+# Waivers for the osv-scanner job (.github/workflows/security.yml). The job fails on any
+# known vulnerability in the dependencies a user can install; a waiver needs a reason
+# and an expiry date, after which the scan fails again. None today. Example:
+#
+# [[IgnoredVulns]]
+# id = "GHSA-xxxx-xxxx-xxxx"
+# ignoreUntil = 2027-01-31T00:00:00Z
+# reason = "only reachable through X, which creative-forge never calls; fixed upstream in Y"

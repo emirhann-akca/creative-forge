@@ -64,18 +64,25 @@ def read_source(src: Path) -> tuple[str, dict[str, bytes], str]:
     src = Path(src)
     files: dict[str, bytes] = {}
     if src.is_dir():
+        top = src.resolve()
         for p in src.rglob("*"):
-            if p.is_file():
+            # a symlink that leads out of the folder (to ~/.ssh, say) is not packed into an ad
+            if p.is_file() and p.resolve().is_relative_to(top):
                 files[p.relative_to(src).as_posix()] = p.read_bytes()
         index = "index.html" if "index.html" in files else ""
     elif zipfile.is_zipfile(src):
-        with zipfile.ZipFile(src) as z:
-            files = {i.filename: z.read(i) for i in z.infolist() if not i.is_dir()}
+        from creative_forge.playable.static import PlayableError, read_zip
+
+        try:
+            files = read_zip(src)
+        except PlayableError as e:
+            raise PackError(str(e)) from None
         htmls = [n for n in files if n.lower().endswith((".html", ".htm"))]
         index = "index.html" if "index.html" in files else (htmls[0] if len(htmls) == 1 else "")
     elif src.is_file():
+        top = src.parent.resolve()
         for p in src.parent.rglob("*"):
-            if p.is_file() and p.stat().st_size < 50_000_000:
+            if p.is_file() and p.resolve().is_relative_to(top) and p.stat().st_size < 50_000_000:
                 files[p.relative_to(src.parent).as_posix()] = p.read_bytes()
         index = src.name
     else:

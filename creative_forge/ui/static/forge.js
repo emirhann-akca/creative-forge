@@ -15,3 +15,15 @@
     box.appendChild(btn);
   });
 })();
+/* Confirmations and auto-submitting filters, in place of inline onsubmit / onchange handlers (the
+   Content-Security-Policy runs no inline script). */
+(function () {
+  document.addEventListener('submit', function (ev) {
+    var form = ev.target;
+    if (form && form.dataset && form.dataset.confirm && !window.confirm(form.dataset.confirm)) ev.preventDefault();
+  });
+  document.addEventListener('change', function (ev) {
+    var el = ev.target;
+    if (el && el.hasAttribute && el.hasAttribute('data-autosubmit') && el.form) el.form.submit();
+  });
+})();

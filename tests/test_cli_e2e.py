@@ -54,11 +54,27 @@ def test_qa_command_on_a_defective_file(short_audio_video, tmp_path, capsys):
     assert checks["seam"]["status"] == "skip"  # no timeline given
 
 
+# canaries built here (not literals a secret scanner would flag), one per variable a real run reads
+SECRETS = {
+    k: f"canary{i}-{k.lower()}"
+    for i, k in enumerate(
+        (
+            "CREATIVE_FORGE_META_TOKEN",
+            "CREATIVE_FORGE_APPLOVIN_KEY",
+            "CREATIVE_FORGE_COMFYUI_TOKEN",
+            "CREATIVE_FORGE_PROJECT",
+        )
+    )
+}
+
+
 @pytest.mark.slow
-def test_demo_end_to_end(tmp_path):
+def test_demo_end_to_end(tmp_path, monkeypatch):
     from creative_forge.demo import run_demo
     from creative_forge.report import write_report
 
+    for k, v in SECRETS.items():  # present in the environment of a real run; never written anywhere
+        monkeypatch.setenv(k, v)
     rr = run_demo(tmp_path / "demo", keep_work=True, log=lambda _: None)
     assert [c.error for c in rr.concepts] == [None, None]
     assert rr.status is not Status.FAIL, json.dumps(
@@ -103,3 +119,9 @@ def test_demo_end_to_end(tmp_path):
         x.creative.ad_name for x in exports
     )
     assert json.loads(js.read_text(encoding="utf-8"))["concepts"][0]["exports"][0]["format"] == "9:16"
+
+    # no secret from the environment reaches the report, the manifests, the sidecars or the ledger
+    for f in (tmp_path / "demo").rglob("*"):
+        if f.is_file() and f.suffix in (".json", ".jsonl", ".html", ".txt", ".log", ".yaml"):
+            text = f.read_text(encoding="utf-8", errors="replace")
+            assert not [k for k, v in SECRETS.items() if v in text], f

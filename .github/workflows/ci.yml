@@ -14,10 +14,14 @@ concurrency:
 
 jobs:
   lint:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
       - name: Install
         run: |
@@ -41,10 +45,14 @@ jobs:
           if ($errors) { exit 1 }
 
   build:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
       - name: Build wheel and sdist
         run: bash .github/scripts/annotate.sh "uv build" uv build --out-dir dist
@@ -57,7 +65,8 @@ jobs:
                   "creative_forge/ui/templates/run.html", "creative_forge/qa/ocr_vision.swift",
                   "creative_forge/data/pricing.yaml", "creative_forge/data/model_licenses.yaml",
                   "creative_forge/data/tag_taxonomy.yaml", "creative_forge/ui/templates/perf.html",
-                  "creative_forge/playable/stubs.js", "creative_forge/data/desktop/creative-forge.ico",
+                  "creative_forge/playable/stubs.js", "creative_forge/ui/static/theme.js",
+                  "creative_forge/data/desktop/creative-forge.ico",
                   "creative_forge/data/desktop/creative-forge.icns", "creative_forge/data/desktop/creative-forge.png"]
           missing = [n for n in need if n not in names]
           if missing:
@@ -71,6 +80,8 @@ jobs:
           retention-days: 7
 
   tests:
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -87,6 +98,8 @@ jobs:
       CREATIVE_FORGE_HOME: ${{ github.workspace }}/.forge-home
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
       # Nine jobs need the same pinned build; download it once per OS and pin, not nine times from its publishers.
       # The user-install jobs below always download it fresh, the way a user does.
@@ -122,6 +135,8 @@ jobs:
   # "release 404" jobs, FORGE_RELEASE_URL is a wheel that does not exist and FORGE_ARCHIVE_URL is this commit's
   # archive, so the 404 -> archive path runs for real. One job installs the wheel the build job made.
   user-install:
+    permissions:
+      contents: read
     needs: build
     strategy:
       fail-fast: false
@@ -142,6 +157,8 @@ jobs:
       SOURCE_MODE: ${{ matrix.source }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: dist

@@ -9,14 +9,14 @@
   <h1>{{ cell.name }}</h1>{{ m.cell_status(cell.status, t) }}
   <span class="spacer"></span>
   {% if cell.status == "draft" %}
-    <form method="post" action="/tests/{{ cell.id }}/delete" onsubmit="return confirm('{{ t.tc_delete_confirm }}')">
+    <form method="post" action="/tests/{{ cell.id }}/delete" data-confirm="{{ t.tc_delete_confirm }}">
       <input type="hidden" name="token" value="{{ token }}"><button class="btn danger" type="submit">{{ t.tc_delete }}</button></form>
     <form method="post" action="/tests/{{ cell.id }}/start" class="row">
       <input type="hidden" name="token" value="{{ token }}">
       <label class="sr-only" for="start-on">{{ t.tc_start_on }}</label><input class="input" type="date" id="start-on" name="on" value="{{ today }}">
       <button class="btn primary" type="submit">{{ ic.icon("lock") }}{{ t.tc_start }}</button></form>
   {% elif cell.status == "running" %}
-    <form method="post" action="/tests/{{ cell.id }}/close" onsubmit="return confirm('{{ t.tc_close_confirm }}')">
+    <form method="post" action="/tests/{{ cell.id }}/close" data-confirm="{{ t.tc_close_confirm }}">
       <input type="hidden" name="token" value="{{ token }}"><button class="btn" type="submit">{{ t.tc_close }}</button></form>
   {% endif %}
   <p class="sub">{{ cell.network }} · {{ t["m_" ~ cell.metric] }} · {{ t.tc_created }} {{ cell.created_at|when(lang) }}{% if cell.started_on %} · {{ t.tc_window }} {{ cell.started_on }} → {{ cell.ended_on or t.today }}{% endif %}</p>

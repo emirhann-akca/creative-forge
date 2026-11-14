@@ -20,9 +20,11 @@ Pages (Turkish by default, English with ``?lang=en``; the choice is remembered i
   synced from the networks. Mock mode is the default; a live network needs its own tick box.
 * **Settings**: network credentials present or missing (never their values), CSV import, folders, ``forge doctor``.
 
-Binds 127.0.0.1 unless ``--host`` says otherwise. Requests whose ``Host`` header is not a loopback name are refused
-(DNS rebinding), and every state-changing request must carry the per-process token that the pages embed, so another
-web page in the same browser cannot post decisions.
+Binds 127.0.0.1 unless ``--host`` says otherwise; on any other address every client needs the access token printed
+at start. Requests whose ``Host`` header is not a loopback name are refused (DNS rebinding), every state-changing
+request must carry the per-process token that the pages embed and come from this origin, so another web page in the
+same browser cannot post decisions, and every response carries a strict Content-Security-Policy and the other
+security headers (``ui/security.py``).
 """
 
 from __future__ import annotations
@@ -45,16 +47,16 @@ from dataclasses import dataclass, replace
 from datetime import date
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote, urlencode, urlsplit
+from urllib.parse import quote, urlencode
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from creative_forge import __version__
 from creative_forge.review import ExportRecord, ReviewError, decide, load_exports, load_review
-from creative_forge.ui import catalog
+from creative_forge.ui import catalog, security
 from creative_forge.ui.i18n import LANGS, T, fmt_date, fmt_num, fmt_pct, fmt_prob, review_error
 
 HERE = Path(__file__).resolve().parent
@@ -108,8 +110,13 @@ def _run_status(exports: list[ExportRecord]) -> str:
 def load_run(root: Path, rid: str) -> RunInfo:
     if not rid or rid.startswith("/") or any(part in ("", ".", "..") for part in rid.split("/")):
         raise HTTPException(404, "no such run")
-    path = (root / rid).resolve()
-    if not path.is_relative_to(root.resolve()) or not (path / "report.json").is_file():
+    # rid comes from the URL: normalised, then required to stay inside --root (symlinks resolved)
+    base = os.path.realpath(root)
+    full = os.path.realpath(os.path.join(base, rid))
+    if not full.startswith(base if base.endswith(os.sep) else base + os.sep):
+        raise HTTPException(404, "no such run")
+    path = Path(full)
+    if not (path / "report.json").is_file():
         raise HTTPException(404, "no such run")
     try:
         exports = load_exports(path)
@@ -229,10 +236,15 @@ def create_app(
     poster_cache: Path | None = None,
     campaign_state: Path | None = None,
     campaign_demo_cmd: list[str] | None = None,
+    access_token: str | None = None,
 ) -> FastAPI:
+    """``allowed_hosts=None`` (a wildcard bind) accepts any Host header and needs ``access_token``, which every client
+    must then present (see ``ui/security.py``)."""
     from creative_forge.perf.cells import CELL_METRICS, CellError, CellStore, Rule, evaluate
     from creative_forge.perf.store import default_db
 
+    if allowed_hosts is None and not access_token:
+        raise ValueError("a UI that accepts any Host needs an access_token")
     root = Path(root).resolve()
     if (root / "report.json").is_file():  # `--root out/demo` names a run itself: list it from its parent
         root = root.parent
@@ -273,13 +285,8 @@ def create_app(
 
         return cache_dir() / "ui-posters"
 
-    @app.middleware("http")
-    async def loopback_only(request: Request, call_next):  # type: ignore[no-untyped-def]
-        if allowed_hosts is not None:
-            host = urlsplit("//" + request.headers.get("host", "")).hostname
-            if host not in allowed_hosts:
-                return PlainTextResponse(f"host {host!r} is not allowed; start with --host to expose", 400)
-        return await call_next(request)
+    # outermost: Host check, access token, cross-site refusal and security headers for every response
+    app.add_middleware(security.Guard, hosts=allowed_hosts, access_token=access_token)
 
     async def require_token(request: Request) -> dict[str, Any]:
         form = await request.form()
@@ -292,7 +299,7 @@ def create_app(
             else:
                 values.setdefault(k, v)
         sent = request.headers.get(TOKEN_HEADER) or str(values.get("token", ""))
-        if not secrets.compare_digest(sent, token):
+        if not secrets.compare_digest(sent.encode(), token.encode()):
             raise HTTPException(403, "missing or wrong token; reload the page")
         return values
 
@@ -459,7 +466,10 @@ def create_app(
         html = run.path / "report.html"
         if not html.is_file():
             raise HTTPException(404, "this run has no report.html")
-        return FileResponse(html, media_type="text/html; charset=utf-8")
+        # a file on disk, maybe from someone else's run: shown without scripts, requests or this origin's rights
+        return FileResponse(
+            html, media_type="text/html; charset=utf-8", headers={"Content-Security-Policy": security.REPORT_CSP}
+        )
 
     @app.get("/runs/{rid:path}/media/{name}")
     def media(rid: str, name: str) -> FileResponse:
@@ -671,7 +681,7 @@ def create_app(
             if store.get(cell_id) is None:
                 raise HTTPException(404, "no such test") from e
             return test_view(request, cell_id, 409, error=str(e))
-        return RedirectResponse(f"/tests/{cell_id}", status_code=303)
+        return RedirectResponse(f"/tests/{int(cell_id)}", status_code=303)  # a local path, never another site
 
     # ------------------------------------------------------------------------------------------------ performance
     @app.get("/perf", response_class=HTMLResponse)
@@ -991,7 +1001,10 @@ def create_app(
         upload = form.get("file")
         network = str(form.get("network", ""))
         account = (str(form.get("account") or "").strip() or "csv")[:64]
-        filename = Path(str(getattr(upload, "filename", "") or "")).name
+        # the sender's name, reduced to a bare file name: it names the import source and the temp file
+        filename = Path(str(getattr(upload, "filename", "") or "").replace("\\", "/")).name
+        if filename in ("", ".", "..") or "\x00" in filename:
+            filename = ""
         error: str | None = None
         detail: str | None = None
         summary = None
@@ -1005,7 +1018,7 @@ def create_app(
                 error = "too_large"
             else:
                 tmpdir = Path(tempfile.mkdtemp(prefix="forge-upload-"))
-                tmp = tmpdir / filename
+                tmp = tmpdir / filename  # a bare name (".." and path parts were dropped above)
                 try:
                     tmp.write_bytes(data)
                     summary = import_csv(PerfStore(db_path()), tmp, network, account)
@@ -1069,20 +1082,32 @@ def _bind(host: str, port: int, explicit_port: bool) -> socket.socket:
     return sock
 
 
+WILDCARDS = frozenset({"0.0.0.0", "::", ""})  # nosec B104 (names compared, nothing bound here)
+
+
 def serve(root: Path, *, host: str = "127.0.0.1", port: int | None = None, open_browser: bool = True) -> int:
     import uvicorn
 
-    local = host in LOOPBACK
-    app = create_app(root, allowed_hosts=LOOPBACK if local else None)
+    bare = host.strip("[]")
+    local = bare in LOOPBACK
+    # Reachable from the network: every client needs this token (ui/security.py); a wildcard bind accepts any Host.
+    access = None if local else secrets.token_urlsafe(32)
+    hosts = LOOPBACK if local else (None if bare in WILDCARDS else LOOPBACK | {bare.lower()})
+    app = create_app(root, allowed_hosts=hosts, access_token=access)
     sock = _bind(host, 8765 if port is None else port, port is not None)
     bound = sock.getsockname()[1]
-    shown = f"[{host}]" if ":" in host else host
+    shown = f"[{bare}]" if ":" in bare else bare
     url = f"http://{shown}:{bound}/"
+    if access:
+        url += f"?access={access}"
     print(f"creative-forge UI: {url}  (runs under {Path(root).resolve()}; Ctrl+C to stop)", flush=True)
     if not local:
-        print("warning: reachable from other machines; anyone who can open the page can approve exports", flush=True)
+        print(
+            "warning: reachable from other machines; only people given the URL with its access token can open it",
+            flush=True,
+        )
     if open_browser:
-        threading.Timer(0.6, webbrowser.open, [url.replace("0.0.0.0", "127.0.0.1")]).start()
+        threading.Timer(0.6, webbrowser.open, [url.replace("0.0.0.0", "127.0.0.1")]).start()  # nosec B104
     server = uvicorn.Server(uvicorn.Config(app, log_level="warning"))
     server.run(sockets=[sock])
     return 0

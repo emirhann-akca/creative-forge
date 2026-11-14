@@ -7,9 +7,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="application-name" content="creative-forge">
 <meta name="color-scheme" content="light dark">
-<meta name="htmx-config" content='{"responseHandling":[{"code":"204","swap":false},{"code":"[23]..","swap":true},{"code":"422","swap":true,"error":false},{"code":"...","swap":false,"error":true}]}'>
+<meta name="htmx-config" content='{"allowEval":false,"allowScriptTags":false,"responseHandling":[{"code":"204","swap":false},{"code":"[23]..","swap":true},{"code":"422","swap":true,"error":false},{"code":"...","swap":false,"error":true}]}'>
 <title>{% block title %}{{ t.nav_overview }}{% endblock %} · Creative Forge</title>
-<script>try{var s=localStorage.getItem('ui-theme');if(s)document.documentElement.setAttribute('data-theme',s)}catch(e){}</script>
+<script src="/static/theme.js"></script>
 <link rel="stylesheet" href="/static/ui.css">
 <link rel="stylesheet" href="/static/forge.css">
 <script src="/static/htmx.min.js" defer></script>
