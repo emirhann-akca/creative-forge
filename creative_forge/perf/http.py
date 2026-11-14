@@ -91,8 +91,26 @@ class ApiClient:
             raise TransientError(f"HTTP {r.status_code}")
         raise PerfApiError(f"{self.host}: HTTP {r.status_code}: {self.redactor.clean(str(body)[:500])}")
 
+    def check_url(self, url: str) -> None:
+        """Only https to this client's own host: a pagination link in a response (Meta's ``paging.next``) is data,
+        and the token in the headers must never follow it anywhere else."""
+        parts = urllib.parse.urlsplit(url)
+        try:
+            port = parts.port
+        except ValueError:
+            port = -1
+        if (
+            parts.scheme != "https"
+            or (parts.hostname or "").lower() != self.host.lower()
+            or port not in (None, 443)
+            or parts.username is not None
+            or parts.password is not None
+        ):
+            raise PerfApiError(f"{self.host}: refused a request to {parts.scheme}://{parts.hostname} (not {self.host})")
+
     def get(self, url: str, params: dict[str, Any] | None = None, headers: dict[str, str] | None = None) -> Any:
         """``(response, parsed JSON body)`` of a successful GET, after retries."""
+        self.check_url(url)
 
         def once() -> Any:
             self.requests += 1

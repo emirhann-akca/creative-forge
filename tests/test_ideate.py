@@ -161,3 +161,14 @@ def test_ideate_command_offline(good_video, tmp_path, monkeypatch, capsys):
     printed = capsys.readouterr().out
     assert "lint_concept: blocking: hand-enters-from-edge" in printed and "submit_concepts: accepted" in printed
     assert len(load_spec(out).concepts) == 2
+
+
+def test_a_model_obeying_injected_library_text_cannot_reach_files_or_other_tools(tools, good_video):
+    """Library entries and lessons are text a model reads; whatever it is told there, it only acts through the
+    five declared tools, and a clip must be one list_gameplay_clips returned (no other file is ever opened)."""
+    assert tools.call("run_shell", {"cmd": "cat ~/.ssh/id_ed25519"}) == {"error": "unknown tool 'run_shell'"}
+    assert "error" in tools.call("search_creative_library", {"query": "x", "path": "/etc/passwd"})  # unknown arg
+    for clip in ("/etc/passwd", "../../secret.mp4", str(good_video) + "/../x.mp4", "https://evil.example/a.mp4"):
+        out = tools.submit_concepts([draft(Path(clip)), draft(Path(clip), id="second")])
+        assert not out["accepted"] and all("unknown-clip" in p for p in out["problems"]), clip
+    assert tools.accepted is None

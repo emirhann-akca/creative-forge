@@ -30,6 +30,41 @@ class PlayableError(ValueError):
     pass
 
 
+# A playable is a few MB (every network caps it at 5 MB or less). A zip from someone else is read into memory, never
+# extracted here, but a decompression bomb or an absolute or ../ member name is refused before anything is read.
+MAX_ZIP_MEMBERS = 2000
+MAX_ZIP_BYTES = 100 * 1024 * 1024  # uncompressed, all members together
+
+
+def read_zip(path: Path) -> dict[str, bytes]:
+    """Every file of a zip by its member name, after checking names and sizes (``PlayableError`` otherwise).
+    ``ZipFile.read`` stops at each member's declared size and checks its CRC, so the declared sizes bound memory."""
+    try:
+        with zipfile.ZipFile(path) as z:
+            infos = [i for i in z.infolist() if not i.is_dir()]
+            if len(infos) > MAX_ZIP_MEMBERS:
+                raise PlayableError(f"{Path(path).name}: {len(infos)} files in the zip (at most {MAX_ZIP_MEMBERS})")
+            total = sum(i.file_size for i in infos)
+            if total > MAX_ZIP_BYTES:
+                raise PlayableError(
+                    f"{Path(path).name}: {total / 1e6:.0f} MB uncompressed (at most {MAX_ZIP_BYTES / 1e6:.0f} MB)"
+                )
+            for i in infos:
+                name = i.filename
+                parts = PurePosixPath(name).parts
+                if (
+                    name.startswith(("/", "\\"))
+                    or "\\" in name
+                    or "\x00" in name
+                    or ".." in parts
+                    or (parts and ":" in parts[0])
+                ):
+                    raise PlayableError(f"{Path(path).name}: unsafe file name in the zip: {name!r}")
+            return {i.filename: z.read(i) for i in infos}
+    except zipfile.BadZipFile as e:
+        raise PlayableError(f"{Path(path).name}: not a readable zip: {e}") from None
+
+
 @dataclass
 class Bundle:
     path: Path
@@ -52,8 +87,7 @@ def load(path: Path) -> Bundle:
         raise PlayableError(f"{path} not found")
     size = path.stat().st_size
     if zipfile.is_zipfile(path):
-        with zipfile.ZipFile(path) as z:
-            files = {i.filename: z.read(i) for i in z.infolist() if not i.is_dir()}
+        files = read_zip(path)
         htmls = [n for n in files if n.lower().endswith((".html", ".htm"))]
         index = "index.html" if "index.html" in files else (htmls[0] if len(htmls) == 1 else "")
         if not index:

@@ -27,6 +27,7 @@ import datetime as dt
 import json
 import os
 import plistlib
+import re
 import shutil
 import subprocess
 import sys
@@ -39,6 +40,7 @@ from collections.abc import Callable, Mapping
 from importlib import resources
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 APP_NAME = "Creative Forge"
 GUI_SCRIPT = "creative-forge"
@@ -172,6 +174,17 @@ def open_window_at(url: str, state: Path) -> subprocess.Popen | None:
 
 
 # -- the server -------------------------------------------------------------------------
+def _own_request(scope: dict) -> bool:
+    """A /__app/ request from this app's own pages: Host is this machine (no DNS rebinding)
+    and the browser does not mark it as sent by another site (a page elsewhere cannot
+    stop the app with a beacon to /__app/bye)."""
+    headers = {k.lower(): v for k, v in scope.get("headers", [])}
+    host = headers.get(b"host", b"").decode("latin-1")
+    name = (urlsplit("//" + host).hostname or "").lower()
+    site = headers.get(b"sec-fetch-site", b"").decode("latin-1")
+    return name in ("127.0.0.1", "localhost", "::1") and site not in ("cross-site", "same-site")
+
+
 class Heartbeat:
     """Serves /__app/{ping,bye,health,heartbeat.js}; adds the script to every full page."""
 
@@ -181,6 +194,13 @@ class Heartbeat:
         self.last_ping = clock()
         self.pinged = False
         self.bye_at: float | None = None
+
+    @staticmethod
+    async def _refuse(send: Any) -> None:
+        body = b"refused"
+        headers = [(b"content-type", b"text/plain"), (b"content-length", str(len(body)).encode())]
+        await send({"type": "http.response.start", "status": 403, "headers": headers})
+        await send({"type": "http.response.body", "body": body})
 
     @staticmethod
     async def _plain(send: Any, body: bytes, ctype: bytes) -> None:
@@ -194,6 +214,9 @@ class Heartbeat:
             await self.app(scope, receive, send)
             return
         path = scope.get("path", "")
+        if path.startswith("/__app/") and not _own_request(scope):
+            await self._refuse(send)
+            return
         if path == "/__app/ping":
             # a ping after a goodbye means another window or the next page is there; by order,
             # not by time (Windows' monotonic clock ticks every ~16 ms)
@@ -242,7 +265,7 @@ class Heartbeat:
 
 def _get(url: str, timeout: float = 2.0) -> tuple[int, bytes]:
     try:
-        with urllib.request.urlopen(url, timeout=timeout) as r:
+        with urllib.request.urlopen(url, timeout=timeout) as r:  # nosec B310 (http://127.0.0.1 only)
             return r.status, r.read()
     except urllib.error.HTTPError as e:
         return e.code, e.read()
@@ -252,7 +275,8 @@ def _get(url: str, timeout: float = 2.0) -> tuple[int, bytes]:
 
 def running_url(state: Path) -> str | None:
     url = _read_state(state).get("url")
-    if not url:
+    # app.json may only name a port on this machine: the window opens this URL
+    if not isinstance(url, str) or not re.fullmatch(r"http://127\.0\.0\.1:[0-9]{1,5}/", url):
         return None
     code, body = _get(url + "__app/health", timeout=1.5)
     return url if code == 200 and b"creative-forge" in body else None

@@ -52,6 +52,35 @@ class ComfyUIError(RuntimeError):
     pass
 
 
+METADATA_HOSTS = frozenset({"169.254.169.254", "fd00:ec2::254", "metadata.google.internal", "metadata"})
+
+
+def check_worker_url(base_url: str) -> str:
+    """The worker URL (``CREATIVE_FORGE_COMFYUI_URL`` or ``--url``) is usually on the LAN, so private addresses are
+    fine; it must be http(s), carry no ``user:password@`` (the token goes in a header) and never be a link-local or
+    cloud metadata address (a request there from a cloud VM hands out its credentials, and the token would go too)."""
+    import ipaddress
+    from urllib.parse import urlsplit
+
+    try:
+        parts = urlsplit(base_url.strip())
+        parts.port  # noqa: B018 (raises on a malformed port)
+    except ValueError as e:
+        raise ComfyUIError(f"ComfyUI URL {base_url!r} is not valid: {e}") from None
+    host = (parts.hostname or "").lower()
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        ip = None
+    if parts.scheme not in ("http", "https") or not host:
+        raise ComfyUIError(f"ComfyUI URL must be http(s)://host[:port], not {base_url!r}")
+    if parts.username is not None or parts.password is not None:
+        raise ComfyUIError(f"ComfyUI URL must not carry user:password@; set {ENV_TOKEN} instead")
+    if host in METADATA_HOSTS or (ip is not None and ip.is_link_local):
+        raise ComfyUIError(f"ComfyUI URL points at a link-local or cloud metadata address ({host})")
+    return base_url
+
+
 class PromptLost(ComfyUIError):
     """The worker knows nothing of a prompt id (it restarted): the job has to be queued again (local, so free)."""
 
@@ -90,7 +119,7 @@ class ComfyUIClient:
         connect_timeout_s: float = 5.0,
         read_timeout_s: float = 60.0,
     ) -> None:
-        self.base = base_url.rstrip("/")
+        self.base = check_worker_url(base_url).rstrip("/")
         self.session = session or requests.Session()
         self.timeout = (connect_timeout_s, read_timeout_s)
         self._headers = {auth_header: token if " " in token else f"Bearer {token}"} if token else {}
@@ -367,7 +396,10 @@ class ComfyUIImageEditProvider(ImageEditProvider):
 
 def preflight(base_url: str, checkpoint: str, timeout_s: float = 5.0) -> str | None:
     """For ``forge run --dry-run``: is the server up, and does it have the checkpoint? Returns a problem or None."""
-    url = f"{base_url.rstrip('/')}/object_info/CheckpointLoaderSimple"
+    try:
+        url = f"{check_worker_url(base_url).rstrip('/')}/object_info/CheckpointLoaderSimple"
+    except ComfyUIError as e:
+        return str(e)
     try:
         r = requests.get(url, timeout=timeout_s)
         r.raise_for_status()

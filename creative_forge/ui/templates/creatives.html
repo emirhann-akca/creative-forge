@@ -25,7 +25,7 @@
     {% for key, label in [("hook", t.tag_hook_type), ("mechanic", t.tag_mechanic), ("fmt", t.tag_format), ("concept", t.col_concept), ("run", t.col_run)] %}
       {% if facets[key] %}
       <label class="sr-only" for="f-{{ key }}">{{ label }}</label>
-      <select class="select" id="f-{{ key }}" name="{{ key }}" onchange="this.form.submit()">
+      <select class="select" id="f-{{ key }}" name="{{ key }}" data-autosubmit>
         <option value="">{{ label }}: {{ t.any }}</option>
         {% for v in facets[key] %}<option value="{{ v }}"{% if f[key] == v %} selected{% endif %}>{{ label }}: {{ v }}</option>{% endfor %}
       </select>
