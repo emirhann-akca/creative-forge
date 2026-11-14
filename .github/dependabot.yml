@@ -1,0 +1,28 @@
+# Dependabot version updates: weekly, grouped so each ecosystem is one pull request, and
+# only for releases at least a week old (a compromised release is usually caught within
+# days). Security updates are separate and immediate once the owner enables them
+# (Settings > Code security > Dependabot security updates).
+version: 2
+updates:
+  - package-ecosystem: pip
+    directories: ["/", "/.github/requirements"]
+    schedule:
+      interval: weekly
+      day: monday
+    versioning-strategy: increase-if-necessary
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    groups:
+      python:
+        patterns: ["*"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]

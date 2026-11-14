@@ -1,0 +1,149 @@
+# Finds vulnerabilities before they ship (docs/SECURITY_MODEL.md, SECURITY.md):
+#   codeql    static analysis of the Python package and the workflows
+#   osv       known vulnerabilities in every dependency a user can get: the newest and the
+#             lowest versions pyproject.toml allows, plus the CI tools (fails on any that is
+#             not waived with a reason and an expiry date in osv-scanner.toml)
+#   gitleaks  secrets anywhere in the git history, every branch (a .gitleaksignore would list
+#             reviewed false positives; there are none)
+#   bandit    Python security lint at medium severity and confidence ([tool.bandit])
+# Third-party tools are pinned: actions by commit SHA, binaries by version and SHA-256,
+# Python tools by version and hash. Results are uploaded to GitHub code scanning when the
+# repository allows it; an upload that is refused (code scanning off, a fork's read-only
+# token) does not fail the job, the findings gate does.
+name: security
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "17 4 * * 1" # Mondays: new advisories for code that did not change
+  workflow_dispatch:
+
+permissions: {} # every job asks for exactly what it needs
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GITLEAKS_VERSION: "8.30.1"
+  GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+  OSV_VERSION: "2.7.0"
+  OSV_SHA256: 160c6253e2922e9e0a6a9771c5c4c40a4b3c6090b34a3cdd5e80c96cc2e4218b
+
+jobs:
+  codeql:
+    name: codeql (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write # upload the results to code scanning
+      actions: read # CodeQL reads the workflow run it is part of
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, actions] # build-mode none: neither needs a build
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          queries: security-extended
+          config: |
+            paths-ignore:
+              - tests
+              - "**/static/htmx.min.js"
+      - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          category: /language:${{ matrix.language }}
+          upload: never
+          output: sarif
+      - name: Upload to code scanning (skipped when the repository refuses it)
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        continue-on-error: true
+        with:
+          sarif_file: sarif
+          category: /language:${{ matrix.language }}
+      - name: Gate on error-level findings
+        run: python3 .github/scripts/sarif_gate.py sarif
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: codeql-${{ matrix.language }}
+          path: sarif/
+          retention-days: 14
+
+  osv:
+    name: known vulnerabilities (osv-scanner)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - name: Install osv-scanner (pinned version and SHA-256)
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/osv-scanner" \
+            "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_amd64"
+          echo "${OSV_SHA256}  $RUNNER_TEMP/osv-scanner" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/osv-scanner"
+      - name: Resolve what a user can install (newest and lowest allowed versions, all extras)
+        run: |
+          mkdir -p "$RUNNER_TEMP/newest" "$RUNNER_TEMP/lowest"
+          uv pip compile pyproject.toml --all-extras --universal --python-version 3.11 -q \
+            -o "$RUNNER_TEMP/newest/requirements.txt"
+          uv pip compile pyproject.toml --all-extras --resolution lowest-direct --python-version 3.11 -q \
+            -o "$RUNNER_TEMP/lowest/requirements.txt"
+      - name: Scan (fails on any known vulnerability not waived in osv-scanner.toml)
+        run: |
+          bash .github/scripts/annotate.sh "osv-scanner: known vulnerabilities" \
+            "$RUNNER_TEMP/osv-scanner" scan source --no-resolve --config osv-scanner.toml \
+            -L "$RUNNER_TEMP/newest/requirements.txt" \
+            -L "$RUNNER_TEMP/lowest/requirements.txt" \
+            -L .github/requirements/requirements.txt
+
+  gitleaks:
+    name: secrets in the git history (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # every commit of every branch, not just this one
+          persist-credentials: false
+      - name: Install gitleaks (pinned version and SHA-256)
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/gitleaks.tar.gz" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C "$RUNNER_TEMP" gitleaks
+      - name: Scan the whole history (findings are redacted in the log)
+        run: |
+          bash .github/scripts/annotate.sh "gitleaks: a secret in the git history (rotate it first)" \
+            "$RUNNER_TEMP/gitleaks" git . --log-opts="--all" --redact --no-banner --exit-code 1
+
+  bandit:
+    name: python security lint (bandit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - run: python -m pip install --require-hashes --no-deps -r .github/requirements/requirements.txt
+      - name: bandit (medium severity and confidence; justified exceptions are marked nosec inline)
+        run: bash .github/scripts/annotate.sh "bandit" bandit -c pyproject.toml -r creative_forge -ll -ii
