@@ -361,3 +361,24 @@ def test_app_json_may_only_name_a_local_port(tmp_path, monkeypatch):
         assert desktop.running_url(tmp_path) is None and probed == []
     desktop._write_state(tmp_path, {"url": "http://127.0.0.1:8765/"})
     assert desktop.running_url(tmp_path) == "http://127.0.0.1:8765/"
+
+
+def test_a_run_path_from_the_url_stays_inside_the_root(root, tmp_path):
+    from fastapi import HTTPException
+
+    from creative_forge.ui.app import load_run
+
+    outside = tmp_path / "elsewhere"
+    outside.mkdir()
+    (outside / "report.json").write_text((root / RID / "report.json").read_text(encoding="utf-8"), encoding="utf-8")
+    links = []
+    try:
+        (root / "link").symlink_to(outside, target_is_directory=True)
+        links.append("link")
+    except (OSError, NotImplementedError):
+        pass  # Windows without the symlink privilege: the other cases still run
+    for rid in ["../elsewhere", "/etc", str(outside), "a/../../elsewhere", ".", "", *links]:
+        with pytest.raises(HTTPException) as e:
+            load_run(root, rid)
+        assert e.value.status_code == 404, rid
+    assert load_run(root, RID).path == (root / RID).resolve()
