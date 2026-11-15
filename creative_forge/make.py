@@ -194,7 +194,10 @@ class Progress:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             tmp = self.path.with_name(f".{self.path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
             tmp.write_text(json.dumps(body, ensure_ascii=False, default=str), encoding="utf-8")
-            os.replace(tmp, self.path)
+            try:
+                os.replace(tmp, self.path)
+            except PermissionError:  # Windows: a reader has the file open this instant; the next step rewrites it
+                tmp.unlink(missing_ok=True)
 
     def step(self, message: str) -> None:
         with self._lock:
