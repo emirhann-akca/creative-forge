@@ -21,6 +21,8 @@ forge perf import meta --account act_1 ...  # creative-level metrics from Meta /
 forge perf report --write-lessons           # IPM, CTR, CPI, hook rate per creative and tag, with intervals
 forge campaign create examples/campaign.yaml  # Meta / TikTok / Google Ads campaigns, all PAUSED; `activate` is apart
 forge campaign demo                         # render -> approve -> paused campaigns -> simulated delivery, on a mock network
+forge make --app puzzle_game --brief "..."  # brief -> spec -> render -> QA in one call (fake providers unless --providers vertex)
+forge snapshot --json                       # runs, reviews, campaigns, packs, playables and the change timeline as JSON
 forge setup ffmpeg                          # pinned ffmpeg 9.0.2, SHA-256 verified, no admin rights
 forge doctor                                # ffmpeg, OCR, folders, ComfyUI, credentials; exit 1 on a blocker
 forge comfy check                           # a ComfyUI GPU worker: VRAM, missing Wan nodes and model files
@@ -484,6 +486,22 @@ forge campaign audit --tail 5                     # verify the hash chain of the
 - **TikTok**: a TikTok For Business developer account and an app in the API for Business portal with the ad account, campaign, creative and reporting scopes approved; an advertiser authorization (OAuth) for the ad account; the app added in TikTok's App Management (its id is `tiktok.app_id`) and a custom identity for the ads.
 - **Google Ads**: a manager account, a developer token with Basic Access (an application to Google), an OAuth client and refresh token with the `adwords` scope, the customer linked under the manager; the app published in the store (App campaigns read it from there).
 - Then `mode: live` for that network, `forge campaign plan` and read it, `forge campaign create --live`, check the objects in the network's own UI, and only then `forge campaign activate … --live`.
+
+## Driven by another program: `forge make`, `forge snapshot` and `--json`
+
+studio-pulse's ad centre (`/reklam`) shows every game's campaigns
+and makes, reviews and publishes creatives from the same screen by running these commands; it shares no database or
+process with creative-forge, so every write still passes the gates above.
+
+| Command | What it prints (`--json`) |
+|---|---|
+| `forge snapshot` | `creative-forge/snapshot/v1`: every export (creative id, ad name, format, QA, review state, poster frame, the game from `app.json`), runs, `forge publish` folders, campaign configs, campaigns (status, caps, the typed phrase), manual packs, playables with their builds and checks, and `timeline`: the audit log as dated changes (created paused, switched on, paused, paused automatically, a budget changed outside forge between two syncs, manual pack, refusals), each with its record's hash |
+| `forge make --app ID [--app-name --store-url --brief --variants 1-4 --language L --mechanic M --hook H --ref KEY]` | `creative-forge/make/v1`: the run folder and its exports. One concept, N hook variants from fixed recipes that pass lint (a brief never breaks a prompt rule: it becomes the hypothesis); `--providers fake` (default) renders offline with synthetic gameplay; `--providers vertex` needs `--budget-usd` and `--gameplay`. `--progress FILE` is rewritten after every step. Nothing is approved |
+| `forge review RUN --approve/--reject FILE --note N` | every export's decision |
+| `forge publish RUN --to DIR` | the folder and count (the run's `app.json` travels with the files) |
+| `forge campaign init --root R --name N --creatives DIR --store-url U --daily D --total-cap T [--network ...] [--app ID]` | the written config: mock accounts for Meta / TikTok / Google, manual packs for AppLovin / Unity / Mintegral |
+| `forge campaign create / activate / pause / sync` | the campaigns with status, caps and the confirmation phrase; nothing activates without `--confirm` |
+| `forge playable sample` / `forge playable pack --json` | a small sample source for a game; the packed path, notes and the static check (also saved next to the build) |
 
 ## Playable ads: per-network check and packaging
 

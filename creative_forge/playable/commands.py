@@ -145,6 +145,15 @@ def cmd_pack(a: argparse.Namespace) -> int:
     except (PackError, OSError, UnicodeDecodeError) as e:
         print(f"pack failed: {e}", file=sys.stderr)
         return 2
+    if a.json:
+        r = check_file(out, a.network, dynamic=False)
+        stem = Path(a.source).stem if Path(a.source).is_file() else Path(a.source).name
+        report = Path(a.out) / f"{stem}.{a.network}.check.json"  # read back by `forge snapshot`
+        report.write_text(json.dumps([r.to_dict()], indent=2, ensure_ascii=False), encoding="utf-8")
+        print(json.dumps({"schema": "creative-forge/playable-pack/v1", "network": a.network, "out": str(out.resolve()),
+                          "notes": notes, "check": r.to_dict(), "report": str(report.resolve())},
+                         indent=2, ensure_ascii=False))  # fmt: skip
+        return 1 if r.status == FAIL else 0
     print(f"packed for {a.network}: {out}")
     for n in notes:
         print(f"  {n}")
@@ -153,6 +162,24 @@ def cmd_pack(a: argparse.Namespace) -> int:
     for line in r.reasons(6):
         print(f"  {line}")
     return 1 if r.status == FAIL else 0
+
+
+def cmd_sample(a: argparse.Namespace) -> int:
+    from creative_forge.campaigns.store_url import StoreUrlError
+    from creative_forge.playable.sample import write_sample
+
+    try:
+        folder = write_sample(Path(a.root), a.name, title=a.title or a.name, store_url=a.store_url, app=a.app,
+                              lang=a.language)  # fmt: skip
+    except (StoreUrlError, FileExistsError) as e:
+        print(f"sample refused: {e}", file=sys.stderr)
+        return 2
+    if a.json:
+        print(json.dumps({"schema": "creative-forge/playable-sample/v1", "folder": str(folder.resolve()),
+                          "html": str((folder / "index.html").resolve())}, indent=2))  # fmt: skip
+    else:
+        print(f"wrote {folder / 'index.html'}; next: forge playable pack {folder} --network <net> --cta-adapter")
+    return 0
 
 
 def add_parser(sub: argparse._SubParsersAction) -> None:
@@ -174,4 +201,14 @@ def add_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--orientation", choices=["portrait", "landscape"], default="portrait", help="Google ad.orientation")
     p.add_argument("--tiktok-orientation", type=int, choices=[0, 1, 2], default=0, help="config.json value")
     p.add_argument("--cta-adapter", action="store_true", help="add window.forgeCTA(url) calling the network's API")
+    p.add_argument("--json", action="store_true", help="print the packed path, notes and the static check as JSON")
     p.set_defaults(fn=cmd_pack)
+    s = psub.add_parser("sample", help="write a small sample playable for a game under <root>/playables/src/")
+    s.add_argument("--name", required=True)
+    s.add_argument("--title")
+    s.add_argument("--store-url", required=True)
+    s.add_argument("--app", help="the game's id (read back by `forge snapshot`)")
+    s.add_argument("--language", choices=["en", "tr"], default="en")
+    s.add_argument("--root", default=".")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(fn=cmd_sample)

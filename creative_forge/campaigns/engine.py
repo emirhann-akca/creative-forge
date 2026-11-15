@@ -468,6 +468,7 @@ class CampaignEngine:
                 "sync",
                 campaign=rec.ref,
                 status=info.get("status"),
+                daily=info.get("daily"),
                 spend=info.get("spend"),
                 rows=len(rows),
                 recommendations=[r.action for r in recs_],

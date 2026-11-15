@@ -57,15 +57,44 @@ def cmd_plan(a: argparse.Namespace) -> int:
     return 1 if plan.problems else 0
 
 
+def _emit(a: argparse.Namespace, data: dict) -> None:
+    print(json.dumps(data, indent=2, ensure_ascii=False, default=str))
+
+
+def _record(r) -> dict:  # type: ignore[no-untyped-def]
+    from creative_forge.campaigns.engine import confirmation_phrase
+
+    d = {k: v for k, v in r.__dict__.items() if k != "settings"}
+    d["ref"] = r.ref
+    d["phrase"] = {"tr": confirmation_phrase(r, "tr"), "en": confirmation_phrase(r, "en")}
+    return d
+
+
 def cmd_create(a: argparse.Namespace) -> int:
     from creative_forge.campaigns.plan import preview_text
 
     with _engine(a, live=a.live) as eng:
         cfg = _config(a.config)
         plan = eng.plan(cfg)
-        print(preview_text(plan, eng.state))
-        print()
+        if not a.json:
+            print(preview_text(plan, eng.state))
+            print()
         rep = eng.create(cfg, a.network or None)
+        if a.json:
+            _emit(a, {
+                "schema": "creative-forge/campaign-create/v1",
+                "ok": rep.ok,
+                "plan": plan.plan_id,
+                "networks": [
+                    {"network": n.network, "created": n.created, "existing": n.existing, "reconciled": n.reconciled,
+                     "stopped": n.stopped or None, "campaign": _record(n.campaign) if n.campaign else None}
+                    for n in rep.networks
+                ],
+                "packs": [str(p) for p in rep.packs],
+                "audit": str(eng.state.audit_path),
+                "active": False,
+            })  # fmt: skip
+            return 0 if rep.ok else 1
         for n in rep.networks:
             if n.stopped:
                 print(f"{n.network}: STOPPED after {n.created} new object(s): {n.stopped}")
@@ -126,6 +155,9 @@ def cmd_activate(a: argparse.Namespace) -> int:
         phrase = input(f'type "{confirmation_phrase(rec)}" to switch it on: ')
     with _engine(a, live=a.live) as eng:
         rec = eng.activate(a.ref, phrase, _config(a.config))
+    if a.json:
+        _emit(a, {"schema": "creative-forge/campaign/v1", "campaign": _record(rec)})
+        return 0
     print(f"{rec.ref}: ACTIVE ({rec.daily:.2f} {rec.currency}/day, cap {rec.total_cap:.2f}, ends {rec.end_day})")
     return 0
 
@@ -133,6 +165,9 @@ def cmd_activate(a: argparse.Namespace) -> int:
 def cmd_pause(a: argparse.Namespace) -> int:
     with _engine(a) as eng:  # pausing needs no --live: it is always allowed
         rec = eng.pause(a.ref, a.reason)
+    if a.json:
+        _emit(a, {"schema": "creative-forge/campaign/v1", "campaign": _record(rec)})
+        return 0
     print(f"{rec.ref}: PAUSED")
     return 0
 
@@ -140,6 +175,11 @@ def cmd_pause(a: argparse.Namespace) -> int:
 def cmd_sync(a: argparse.Namespace) -> int:
     with _engine(a) as eng:  # reads, and pauses at most: no --live needed
         results = eng.sync(a.ref, _config(a.config))
+    if a.json:
+        _emit(a, {"schema": "creative-forge/campaign-sync/v1", "campaigns": [
+            {"campaign": _record(s.campaign), "network": s.info, "rows": s.rows,
+             "recommendations": [r.to_dict() for r in s.recommendations]} for s in results]})  # fmt: skip
+        return 0
     for s in results:
         r = s.campaign
         print(f"{r.ref}  network {s.info.get('status')}, spend {float(s.info.get('spend') or 0):.2f} {r.currency}, "
@@ -170,6 +210,32 @@ def cmd_audit(a: argparse.Namespace) -> int:
             print(json.dumps(rec, ensure_ascii=False))
     print(f"{log.path}: {check.records} record(s), chain {'intact' if check.ok else 'BROKEN: ' + check.problem}")
     return 0 if check.ok else 1
+
+
+def cmd_init(a: argparse.Namespace) -> int:
+    """A starter config (mock accounts for the API networks, manual for the rest) from a publish folder."""
+    from creative_forge.campaigns.init import write_starter
+
+    path = write_starter(
+        Path(a.out) if a.out else None,
+        root=Path(a.root),
+        name=a.name,
+        creatives=Path(a.creatives),
+        store_url=a.store_url,
+        daily=a.daily,
+        total_cap=a.total_cap,
+        max_daily=a.max_daily if a.max_daily is not None else a.daily,
+        max_total=a.max_total if a.max_total is not None else a.total_cap,
+        countries=a.country or ["TR"],
+        networks=a.network or ["meta", "tiktok", "google", "applovin"],
+        app=a.app,
+        formats=a.format or ["9:16"],
+    )
+    if a.json:
+        _emit(a, {"schema": "creative-forge/campaign-init/v1", "config": str(path), "name": path.stem})
+    else:
+        print(f"wrote {path}: mock mode for the API networks; put the real ids in and set mode to go further")
+    return 0
 
 
 def cmd_mock(a: argparse.Namespace) -> int:
@@ -228,6 +294,7 @@ def add_parser(sub: argparse._SubParsersAction) -> None:
     c.add_argument("config")
     c.add_argument("--network", action="append", choices=["meta", "tiktok", "google"], help="only these (repeatable)")
     c.add_argument("--live", action="store_true", help="allow networks in live mode (real ad accounts)")
+    c.add_argument("--json", action="store_true", help="print the result as JSON (for another program)")
     common(c)
     c.set_defaults(campaign_fn=cmd_create)
 
@@ -242,20 +309,40 @@ def add_parser(sub: argparse._SubParsersAction) -> None:
     ac.add_argument("--confirm", metavar="PHRASE", help='the typed phrase, e.g. "YAYINA AL 40.00 USD"')
     ac.add_argument("--config", help="re-check the caps against this config's limits too")
     ac.add_argument("--live", action="store_true")
+    ac.add_argument("--json", action="store_true")
     common(ac)
     ac.set_defaults(campaign_fn=cmd_activate)
 
     pa = csub.add_parser("pause", help="switch one campaign off (always allowed)")
     pa.add_argument("ref")
     pa.add_argument("--reason", default="manual")
+    pa.add_argument("--json", action="store_true")
     common(pa)
     pa.set_defaults(campaign_fn=cmd_pause)
 
     sy = csub.add_parser("sync", help="status, spend and delivery from the networks; kill / scale recommendations")
     sy.add_argument("ref", nargs="?")
     sy.add_argument("--config", help="take automation.auto_pause from this config")
+    sy.add_argument("--json", action="store_true")
     common(sy)
     sy.set_defaults(campaign_fn=cmd_sync)
+
+    i = csub.add_parser("init", help="write a starter config from a `forge publish` folder (mock / manual modes)")
+    i.add_argument("--root", default=".", help="the runs root; the config goes to <root>/campaigns/")
+    i.add_argument("--out", help="config path (default: <root>/campaigns/<name>.yaml, never overwritten)")
+    i.add_argument("--name", required=True, help="a-z, 0-9 and '-', 2-41 characters")
+    i.add_argument("--creatives", required=True, help="the `forge publish` folder")
+    i.add_argument("--store-url", required=True)
+    i.add_argument("--daily", type=float, required=True)
+    i.add_argument("--total-cap", type=float, required=True)
+    i.add_argument("--max-daily", type=float)
+    i.add_argument("--max-total", type=float)
+    i.add_argument("--country", action="append", help="ISO code (repeatable; default TR)")
+    i.add_argument("--network", action="append", choices=["meta", "tiktok", "google", "applovin", "unity", "mintegral"])
+    i.add_argument("--format", action="append", choices=["9:16", "4:5"])
+    i.add_argument("--app", help="the game's id (read back by `forge snapshot`)")
+    i.add_argument("--json", action="store_true")
+    i.set_defaults(fn=run, campaign_fn=cmd_init)
 
     d = csub.add_parser("demo", help="the whole loop offline on the mock network (render, approve, create, deliver)")
     d.add_argument("--out", default="out/campaign-demo")

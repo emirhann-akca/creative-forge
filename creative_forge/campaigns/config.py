@@ -149,6 +149,7 @@ class CampaignConfig(_Strict):
     control: str | None = None  # creative id, ad name or concept of the test cell's control (default: first)
     test_rule: dict[str, Any] | None = None  # perf.cells.Rule fields
     networks: Networks
+    app: str | None = None  # the game's id in studio-pulse (or any other id); only read back, never sent
     _base: Path = PrivateAttr(default=Path("."))
 
     @field_validator("name")

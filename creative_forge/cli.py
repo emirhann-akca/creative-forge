@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -304,6 +305,13 @@ def cmd_review(a: argparse.Namespace) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 2
     decisions = load_review(run)["decisions"]
+    if a.json:
+        out = [{"file": r.file, "creative_id": r.creative_id, "ad_name": r.ad_name, "format": r.format,
+                "qa_status": r.status, "failed": list(r.failed), **{k: decisions.get(r.file, {}).get(k)
+                for k in ("decision", "note", "reviewer", "at")}} for r in load_exports(run)]  # fmt: skip
+        print(json.dumps({"schema": "creative-forge/review/v1", "run_dir": str(run), "exports": out},
+                         indent=2, ensure_ascii=False))  # fmt: skip
+        return 0
     for r in load_exports(run):
         d = decisions.get(r.file, {})
         print(f"{r.file}  QA {r.status}  {d.get('decision', 'undecided')}  {d.get('note', '')}")
@@ -318,7 +326,16 @@ def cmd_publish(a: argparse.Namespace) -> int:
     except ReviewError as e:
         print(f"publish refused: {e}", file=sys.stderr)
         return 1
+    from creative_forge.hub import APP_FILE
+
+    app = Path(a.run_dir) / APP_FILE
+    if app.is_file():  # which game the files are for travels with them (read by `forge snapshot`)
+        shutil.copyfile(app, Path(a.to) / APP_FILE)
     n = len(json.loads(manifest.read_text(encoding="utf-8"))["exports"])
+    if a.json:
+        print(json.dumps({"schema": "creative-forge/publish/v1", "folder": str(Path(a.to).resolve()),
+                          "manifest": str(manifest), "exports": n}, indent=2))  # fmt: skip
+        return 0
     print(f"published {n} export(s) to {a.to} (manifest: {manifest.name})")
     return 0
 
@@ -453,6 +470,64 @@ def cmd_comfy(a: argparse.Namespace) -> int:
     return 0 if ok else 1
 
 
+def cmd_snapshot(a: argparse.Namespace) -> int:
+    from creative_forge.desktop import pick_root
+    from creative_forge.hub import snapshot
+    from creative_forge.paths import data_dir
+
+    root = Path(a.root) if a.root else pick_root(None, data_dir() / "app")
+    data = snapshot(root, state_dir=Path(a.state) if a.state else None, posters=not a.no_posters)
+    if a.json:
+        print(json.dumps(data, indent=2, ensure_ascii=False, default=str))
+        return 0
+    chain = "intact" if data["audit"]["ok"] else "BROKEN"
+    print(f"root {data['root']}: {len(data['creatives'])} export(s) in {len(data['runs'])} run(s), "
+          f"{len(data['campaigns'])} campaign(s), {len(data['playables'])} playable(s), "
+          f"{len(data['timeline'])} change(s); audit chain {chain}")  # fmt: skip
+    return 0
+
+
+def cmd_make(a: argparse.Namespace) -> int:
+    from creative_forge.campaigns.store_url import StoreUrlError
+    from creative_forge.desktop import pick_root
+    from creative_forge.make import MakeError, Request, make
+    from creative_forge.paths import data_dir
+
+    root = Path(a.root) if a.root else pick_root(None, data_dir() / "app")
+    req = Request(
+        app=a.app,
+        brief=a.brief or "",
+        root=root,
+        app_name=a.app_name,
+        store_url=a.store_url,
+        variants=a.variants,
+        languages=tuple(a.language or ["en"]),
+        mechanic=a.mechanic,
+        providers=a.providers,
+        budget_usd=a.budget_usd,
+        gameplay=Path(a.gameplay) if a.gameplay else None,
+        gameplay_in=a.gameplay_in,
+        gameplay_out=a.gameplay_out,
+        format=a.format,
+        hook=a.hook,
+        ref=a.ref,
+    )
+    log = (lambda m: print(m, file=sys.stderr, flush=True)) if a.json else (lambda m: print(m, flush=True))
+    try:
+        res = make(req, progress=Path(a.progress) if a.progress else None, log=log, jobs=a.jobs, ocr=a.ocr)
+    except (MakeError, StoreUrlError) as e:
+        print(f"make refused: {e}", file=sys.stderr)
+        return 2
+    except BudgetExceeded as e:
+        print(f"budget guard: {e}", file=sys.stderr)
+        return 3
+    if a.json:
+        print(json.dumps(res, indent=2, ensure_ascii=False, default=str))
+    else:
+        print(f"run: {res['run_dir']} ({res['status']}, {len(res['exports'])} export(s)); next: forge review")
+    return 1 if res["status"] == "fail" else 0
+
+
 def cmd_ui(a: argparse.Namespace) -> int:
     from creative_forge.ui.app import serve
 
@@ -528,12 +603,14 @@ def build_parser() -> argparse.ArgumentParser:
     sv.add_argument("--reject", nargs="+", metavar="FILE")
     sv.add_argument("--note", help="note stored with the decision (required to reject)")
     sv.add_argument("--reviewer", help="defaults to the OS user name")
+    sv.add_argument("--json", action="store_true", help="print every export's decision as JSON (no prompts)")
     sv.set_defaults(fn=cmd_review)
 
     su = sub.add_parser("publish", help="copy approved exports and a manifest; refuses on failed QA")
     su.add_argument("run_dir")
     su.add_argument("--to", required=True, help="delivery directory")
     su.add_argument("--override", metavar="REASON", help="publish approved exports despite failed checks")
+    su.add_argument("--json", action="store_true", help="print the result as JSON")
     su.set_defaults(fn=cmd_publish)
 
     ss = sub.add_parser("setup", help="install dependencies creative-forge manages itself")
@@ -577,6 +654,36 @@ def build_parser() -> argparse.ArgumentParser:
     cc.add_argument("--workflow", choices=["wan21_flf2v", "wan22_ti2v_5b", "all"], default="all")
     cc.add_argument("--spec", help="check what this spec's ComfyUI steps need instead")
     cc.set_defaults(fn=cmd_comfy)
+
+    sn = sub.add_parser("snapshot", help="everything forge holds (runs, reviews, campaigns, changes) for another tool")
+    sn.add_argument("--root", help="runs folder (default: the desktop app's, else the data dir's runs)")
+    sn.add_argument("--state", help="campaign state folder (default: campaigns/ in the user data folder)")
+    sn.add_argument("--no-posters", action="store_true", help="do not extract poster frames")
+    sn.add_argument("--json", action="store_true")
+    sn.set_defaults(fn=cmd_snapshot)
+
+    sm = sub.add_parser("make", help="brief -> spec -> render -> QA in one call (waits for review; never publishes)")
+    sm.add_argument("--app", required=True, help="the game's id (a-z, 0-9, _)")
+    sm.add_argument("--app-name")
+    sm.add_argument("--store-url", help="the game's store listing (checked; stored with the run)")
+    sm.add_argument("--brief", help="what the test is expected to show; stored as the hypothesis")
+    sm.add_argument("--variants", type=int, default=2, choices=range(1, 5), metavar="N", help="hook variants (1-4)")
+    sm.add_argument("--language", action="append", help="end-card language (repeatable: en, tr, de)")
+    sm.add_argument("--mechanic", default="other", help="mechanic_shown tag (taxonomy value)")
+    sm.add_argument("--hook", help="hook_type to lead with (satisfying-clean, real-hand, reveal, before-after)")
+    sm.add_argument("--ref", help="where the idea came from (e.g. a competitor creative's key); stored in make.json")
+    sm.add_argument("--format", default="video", help="video (playables: `forge playable pack`)")
+    sm.add_argument("--providers", choices=["fake", "vertex"], default="fake", help="fake: offline, no cost")
+    sm.add_argument("--budget-usd", type=float, default=None, help="required with vertex")
+    sm.add_argument("--gameplay", help="a real capture of the game (required with vertex)")
+    sm.add_argument("--gameplay-in", type=float, default=1.0)
+    sm.add_argument("--gameplay-out", type=float, default=None)
+    sm.add_argument("--root", help="runs folder (default: the desktop app's, else the data dir's runs)")
+    sm.add_argument("--progress", help="rewrite this JSON file after each step")
+    sm.add_argument("--jobs", type=int, default=2)
+    sm.add_argument("--ocr", choices=OCR_CHOICES, default="auto")
+    sm.add_argument("--json", action="store_true", help="print the result as JSON; progress goes to stderr")
+    sm.set_defaults(fn=cmd_make)
 
     sui = sub.add_parser("ui", help="local web page: runs, QA reports, players, approve / reject, demo, doctor")
     sui.add_argument("--root", default="out", help="folder searched for runs (default: out)")

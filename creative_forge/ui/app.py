@@ -58,6 +58,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from creative_forge import __version__
+from creative_forge.campaigns.init import STARTER_NETWORKS as _STARTER
 from creative_forge.review import ExportRecord, ReviewError, decide, load_exports, load_review
 from creative_forge.ui import catalog, security
 from creative_forge.ui.i18n import LANGS, T, fmt_date, fmt_num, fmt_pct, fmt_prob, ui_error
@@ -80,15 +81,8 @@ CONNECTIONS = (
 
 
 # The networks of a config written by the Kampanya page: mock mode with synthetic ids, to be replaced by real ones.
-STARTER_NETWORKS: dict[str, Any] = {
-    "meta": {"mode": "mock", "ad_account": "act_100200300", "page_id": "100000000000001",
-             "app_id": "200000000000002", "message": ""},
-    "tiktok": {"mode": "mock", "advertiser_id": "7000000000000000001", "app_id": "7100000000000000001",
-               "location_ids": ["298795"], "identity_id": "identity-1", "ad_text": "Play now"},
-    "google": {"mode": "mock", "customer_id": "1234567890", "headlines": ["Play now"],
-               "descriptions": ["A short, calm puzzle."], "location_ids": ["2792"], "language_ids": ["1037"]},
-    "applovin": {"mode": "manual"},
-}  # fmt: skip
+# the Kampanya page's starter: the three API networks on the mock network plus an AppLovin upload pack
+STARTER_NETWORKS: dict[str, Any] = {k: v for k, v in _STARTER.items() if k in ("meta", "tiktok", "google", "applovin")}
 
 
 @dataclass
