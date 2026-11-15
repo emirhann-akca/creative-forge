@@ -8,6 +8,7 @@ exists). Templates read ``t.key``; strings with ``%s`` take arguments through Ji
 # ruff: noqa: E501
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Any
 
@@ -45,6 +46,7 @@ _TR: dict[str, Any] = {
     "theme_light": "Açık tema",
     "theme_dark": "Koyu tema",
     "footer_local": "yalnız bu bilgisayardan sunuluyor (127.0.0.1)",
+    "footer_network": "ağdan erişilebilir; yalnız erişim anahtarı olan bağlantıyla açılır",
     "breadcrumb": "Konum",
     "cmd_page": "sayfa",
     "cmd_filter": "süzgeç",
@@ -66,7 +68,7 @@ _TR: dict[str, Any] = {
     "spend_short": "Harcama",
     "play": "Oynat",
     "kpi_approved": "Onaylı",
-    "kpi_approved_d": "yayına hazır, özete bağlı",
+    "kpi_approved_d": "yayına hazır, dosya özetine bağlı",
     "creative_id": "Kreatif kimliği",
     "ad_name": "Reklam adı",
     "qa_report": "QA raporu",
@@ -134,7 +136,7 @@ _TR: dict[str, Any] = {
     "kpi_no_perf": "performans verisi yok",
     "ov_today": "Bugün karar bekleyenler",
     "ov_today_lbl": "öncelik sırasıyla",
-    "ov_tampered": "Kilitli kural, başlangıçtaki özetiyle uyuşmuyor. Sonucu kullanmadan önce bak.",
+    "ov_tampered": "Kilitli kuralın özeti başlangıçtakiyle uyuşmuyor. Sonucu kullanmadan önce incele.",
     "ov_failed": "%s kreatif QA'dan kaldı",
     "ov_failed_bd": "Düzelt ya da reddet; kalan bir kreatif gerekçesiz yayınlanamaz.",
     "ov_ready": "%s: karar hazır",
@@ -147,7 +149,7 @@ _TR: dict[str, Any] = {
     "ov_nothing_bd": "Onaylar güncel, QA hatası yok, karar eşiğine ulaşan test yok.",
     "ov_nothing_empty": "İlk kreatifler gelince kararlar burada toplanır.",
     "ov_steps": "Kurulum adımları",
-    "ov_steps_lbl": "seçme disiplini",
+    "ov_steps_lbl": "sırayla",
     "st_creatives": "Kreatif üret",
     "st_creatives_bd": "Bir spec'ten 9:16 ve 4:5 kopyalar, QA raporuyla.",
     "st_perf": "Performans verisini bağla",
@@ -163,7 +165,7 @@ _TR: dict[str, Any] = {
     # demo
     "demo_try": "Demo verisiyle dene",
     "demo_again": "Demoyu yeniden çalıştır",
-    "demo_hint": "Anahtar yok, maliyet yok, yaklaşık 15 sn.",
+    "demo_hint": "Anahtar yok, maliyet yok, yarım dakika kadar sürer.",
     "demo_running": "Demo çalışıyor",
     "demo_running_hint": "Sahte sağlayıcılarla tam hat: kanca, oynanış, kapanış kartı, ses, QA.",
     "demo_done": "Demo hazır",
@@ -209,12 +211,24 @@ _TR: dict[str, Any] = {
     "rv_btn_approve": "Onayla",
     "rv_btn_reject": "Reddet",
     "rv_failed_warn": "QA'dan kalan denetimler: %s. Onaylansa bile yayın gerekçe ister.",
-    "rv_stale_bd": "Dosya karardan sonra değişti; karar bu baytlar için geçerli değil. Yeniden bak.",
+    "rv_stale_bd": "Dosya karardan sonra değişti; karar dosyanın bu hâli için geçerli değil. Yeniden incele.",
     "rv_hash_tip": "Kararın bağlı olduğu dosya özeti",
     "rv_publish_hint": "Yayın komut satırında kalır:",
     "err_reject_note": "Ret için not gerekli: neden olmadığını yaz.",
     "err_decision": "Karar onay ya da ret olmalı.",
     "err_not_export": "Bu dosya bu koşunun bir kopyası değil.",
+    "err_title": "İstek tamamlanamadı",
+    "err_404": "Aradığın sayfa ya da kayıt yok. Silinmiş, taşınmış ya da bağlantı eksik olabilir.",
+    "err_403": "Sayfa eskimiş: uygulama yeniden başlatılmış olabilir. Sayfayı yenile ve tekrar dene.",
+    "err_422": "İstekteki bir değer geçersiz.",
+    "err_other": "Beklenmeyen bir yanıt (HTTP %s). Sayfayı yenileyip tekrar dene.",
+    "err_detail": "Teknik ayrıntı",
+    "err_home": "Genel bakışa dön",
+    "js_err_stale": "İşlem yapılmadı: sayfa eskimiş (uygulama yeniden başlatılmış olabilir). Sayfayı yenile ve tekrar dene.",
+    "js_err_offline": "İşlem yapılmadı: uygulamaya ulaşılamadı. forge ui ya da forge app hâlâ açık mı?",
+    "js_err_other": "İşlem yapılmadı: beklenmeyen bir yanıt (HTTP %s). Sayfayı yenileyip tekrar dene.",
+    "js_reload": "Sayfayı yenile",
+    "js_close": "Kapat",
     # run
     "run_gallery": "Galeride aç",
     "run_sub": "%s kopya, %s onaylı.",
@@ -276,9 +290,9 @@ _TR: dict[str, Any] = {
     "tc_scale_if": "Ölçekle",
     "tc_kill_if": "Durdur",
     "tc_screen": "İlk eleme",
-    "tc_screen_bd": "kol başına %s kurulum; yalnız aralığı tamamen kontrolün altında kalan elenir",
+    "tc_screen_bd": "kreatif başına %s kurulum; yalnız aralığı tümüyle kontrolün altında kalan varyant elenir",
     "tc_decide": "Karar",
-    "tc_decide_bd": "kol başına %s kurulumda ölçekle / durdur / fark yok",
+    "tc_decide_bd": "kreatif başına %s kurulumda ölçekle / durdur / fark yok",
     "tc_summary": "Özet",
     "tc_decided": "Karara ulaşan",
     "tc_control_installs": "Kontrol kurulumu",
@@ -296,7 +310,7 @@ _TR: dict[str, Any] = {
     "tn_metric_hint": "Erken testte IPM önerilir.",
     "tn_pick": "Kontrol ve varyantlar",
     "tn_pick_hint": "Bir kontrol, en fazla 4 varyant",
-    "tn_rule": "Öldür / ölçekle kuralı",
+    "tn_rule": "Durdur / ölçekle kuralı",
     "tn_rule_lock": "başlatınca kilitlenir",
     "tn_rule_bd": "Eşikler kendi CPI'ından ve kontrolünden türetilmeli; evrensel eşik yok.",
     "tn_scale": "Ölçekleme farkı (%)",
@@ -315,7 +329,7 @@ _TR: dict[str, Any] = {
     "tn_save_draft": "Taslak kaydet",
     "tn_save_start": "Kaydet ve başlat",
     "rule_auto": (
-        "%s'de varyant kontrolden en az %%%s iyiyse ve P(daha iyi) ≥ %%%s ise ölçekle; en az %%%s kötüyse durdur. "
+        "Ölçüt: %s. Varyant kontrolden en az %%%s iyiyse ve P(daha iyi) ≥ %%%s ise ölçekle; en az %%%s kötüyse durdur. "
         "İlk eleme %s kurulumda (yalnız açıkça kötü olan elenir), karar %s kurulumda."
     ),
     # performance
@@ -334,7 +348,7 @@ _TR: dict[str, Any] = {
     "pf_unmatched": "eşleşmeyen ad",
     "pf_unmatched_tip": "Reklam adında kreatif kimliği olmayan satırlar; saklanır, raporda yer almaz",
     "pf_min": "Karar için en az gösterim",
-    "pf_rule": "Kazanan ya da kaybeden yalnız iki tarafta da en az %s gösterim varsa ve %%95 Wilson aralıkları örtüşmüyorsa.",
+    "pf_rule": "Kazanan ya da kaybeden ancak iki tarafta da en az %s gösterim varsa ve %%95 Wilson aralıkları örtüşmüyorsa ilan edilir.",
     "pf_by_creative": "Kreatif başına",
     "pf_by_tag": "Etiket başına",
     "pf_dimension": "Boyut",
@@ -347,10 +361,12 @@ _TR: dict[str, Any] = {
     "pf_empty_bd": "Ağın CSV dışa aktarımını yükle ya da Meta / AppLovin API'sinden içe aktar. Sayfa depoyu kendisi oluşturmaz.",
     "pf_store": "Depo:",
     # playables
-    "pl_sub": "Oynanabilir reklamların ağ kurallarına göre denetimi. forge playable check --json çıktısı buradan okunur.",
+    "pl_sub": "Oynanabilir reklamların ağ kurallarına göre denetimi: oynanabilir klasöründeki forge playable check --json çıktıları.",
     "pl_findings": "Bulgular",
     "pl_all_pass": "%s kural geçti",
     "pl_source": "kaynak",
+    "pl_source_col": "Kaynak",
+    "pl_source_of": "%s kuralları (yeni sekmede açılır)",
     "pl_pass": "geçti",
     "pl_warn": "uyarı",
     "pl_uncertain": "belirsiz",
@@ -370,12 +386,12 @@ _TR: dict[str, Any] = {
     "pl_mraid_required": "gerekli",
     "pl_mraid_injected": "ağ ekler",
     "pl_mraid_forbidden": "yasak",
-    "pl_mraid_none": "spec'te yok",
+    "pl_mraid_none": "belirtilmemiş",
     "pl_mraid_unverified": "doğrulanmadı",
     # campaigns
     "cp_badge": "her şey duraklatılmış oluşturulur",
     "cp_sub": "Onaylı ve QA'dan geçmiş kreatiflerden Meta, TikTok ve Google Ads uygulama yükleme kampanyaları. Hazırlamak hiçbir şey harcamaz; yayına almak ayrı, yazılı onaylı bir adımdır.",
-    "cp_error": "Reddedildi",
+    "cp_error": "İşlem tamamlanmadı",
     "cp_created": "Hazır: %s yeni nesne oluşturuldu, %s nesne zaten vardı. Hepsi duraklatılmış.",
     "cp_pack": "Elle yükleme paketi:",
     "cp_stopped": "%s durdu",
@@ -402,8 +418,8 @@ _TR: dict[str, Any] = {
     "cp_days": "gün",
     "cp_store": "Mağaza",
     "cp_store_ok": "biçim doğrulandı",
-    "cp_auto_on": "Otomatik duraklatma açık: kuralın öldürdüğü reklam ve tavana ulaşan kampanya kendiliğinden durur. Ölçekleme hiçbir zaman otomatik değildir.",
-    "cp_auto_off": "Otomatik duraklatma kapalı: öldür / ölçekle kararları yalnız öneridir. Ölçekleme hiçbir zaman otomatik değildir.",
+    "cp_auto_on": "Otomatik duraklatma açık: kuralın durdurduğu reklam ve tavana ulaşan kampanya kendiliğinden durur. Ölçekleme hiçbir zaman otomatik değildir.",
+    "cp_auto_off": "Otomatik duraklatma kapalı: durdur / ölçekle kararları yalnız öneridir. Ölçekleme hiçbir zaman otomatik değildir.",
     "cp_prepare_hint": "Aşağıdaki önizlemedeki nesnelerin hepsi duraklatılmış oluşturulur; hiçbiri harcamaz.",
     "cp_live_ok": "Canlı reklam hesabına yazmayı onaylıyorum",
     "cp_prepare": "Kampanyayı hazırla (duraklatılmış)",
@@ -452,20 +468,22 @@ _TR: dict[str, Any] = {
     "cp_audit_ok": "%s kayıt, zincir sağlam",
     "cp_audit_bad": "zincir bozuk: %s",
     "cp_demo": "Uçtan uca deneme",
-    "cp_demo_bd": "Üret, QA, onayla, teslim et, sahte ağda duraklatılmış kampanya, yazılı onayla yayına al, 10 günlük gürültülü benzetim, performans verisi, öldür / ölçekle önerileri. Anahtar yok, para yok, ağ yok.",
+    "cp_demo_bd": "Üret, QA, onayla, teslim et, sahte ağda duraklatılmış kampanya, yazılı onayla yayına al, 10 günlük gürültülü benzetim, performans verisi, durdur / ölçekle önerileri. Anahtar yok, para yok, ağ yok.",
     "cp_demo_running": "deneme çalışıyor",
     "cp_demo_done": "deneme bitti",
+    "cp_demo_open": "Denemenin kreatiflerini gör",
+    "cp_demo_last": "Önceki denemenin çıktısı duruyor.",
     "cp_demo_failed": "deneme başarısız",
     "cp_demo_run": "Denemeyi çalıştır",
     "cp_how": "Nasıl çalışır",
     "cp_how_items": [
-        "Yalnız forge publish ile teslim edilmiş, insan onaylı ve QA'dan geçmiş dosyalar kullanılır; dosya hash'i yeniden denetlenir.",
+        "Yalnız forge publish ile teslim edilmiş, insan onaylı ve QA'dan geçmiş dosyalar kullanılır; her dosyanın SHA-256 özeti yeniden denetlenir.",
         "Mağaza bağlantısı yer tutucuysa ya da gerçek bir mağaza sayfası biçiminde değilse hiçbir şey planlanmaz.",
         "Kuru koşu, gönderilecek her nesneyi ve isteği gösterir. Her nesnenin adında bir anahtar vardır; tekrar denemek hiçbir şeyi iki kez oluşturmaz.",
         "Kampanya, reklam seti ve reklamlar duraklatılmış oluşturulur; günlük bütçe, toplam tavan ve bitiş tarihi ağa da yazılır.",
         "Yayına almak ayrı bir adımdır: yazılı onay, üst sınırların yeniden denetimi ve ağdaki bütçenin yeniden okunması.",
-        "Her API çağrısı ekleme-yalnız, hash zincirli denetim günlüğüne yazılır.",
-        "Eşitleme, kreatif başına teslimatı performans deposuna alır; test hücresinin kilitli kuralı öldür / ölçekle önerisi üretir.",
+        "Her API çağrısı, yalnız eklenebilen ve özet zinciriyle korunan denetim günlüğüne yazılır.",
+        "Eşitleme, kreatif başına teslimatı performans deposuna alır; testin kilitli kuralı durdur / ölçekle önerisi üretir.",
     ],
     # settings
     "se_sub": "Ağ bağlantıları, CSV içe aktarma, klasörler ve sistem denetimi. Gizli değerler hiçbir zaman gösterilmez.",
@@ -553,6 +571,7 @@ _EN: dict[str, Any] = {
     "theme_light": "Light theme",
     "theme_dark": "Dark theme",
     "footer_local": "served from this computer only (127.0.0.1)",
+    "footer_network": "reachable from the network; opens only with the link that carries the access token",
     "breadcrumb": "Location",
     "cmd_page": "page",
     "cmd_filter": "filter",
@@ -653,7 +672,7 @@ _EN: dict[str, Any] = {
     "ov_nothing_bd": "Reviews are current, nothing failed QA, no test reached its threshold.",
     "ov_nothing_empty": "Decisions gather here once the first creatives exist.",
     "ov_steps": "Setup steps",
-    "ov_steps_lbl": "selection discipline",
+    "ov_steps_lbl": "in order",
     "st_creatives": "Make creatives",
     "st_creatives_bd": "9:16 and 4:5 masters from a spec, with a QA report.",
     "st_perf": "Connect performance data",
@@ -668,7 +687,7 @@ _EN: dict[str, Any] = {
     "ov_no_runs_bd": "The demo needs no keys and costs nothing: fake providers, two concepts, two formats.",
     "demo_try": "Try it with demo data",
     "demo_again": "Run the demo again",
-    "demo_hint": "No keys, no cost, about 15 s.",
+    "demo_hint": "No keys, no cost, about half a minute.",
     "demo_running": "Demo running",
     "demo_running_hint": "The whole pipeline with fake providers: hook, gameplay, end card, audio, QA.",
     "demo_done": "Demo ready",
@@ -718,6 +737,18 @@ _EN: dict[str, Any] = {
     "err_reject_note": "A rejection needs a note: say why not.",
     "err_decision": "The decision must be approve or reject.",
     "err_not_export": "This file is not an export of this run.",
+    "err_title": "The request could not be completed",
+    "err_404": "This page or record does not exist. It may have been deleted or moved, or the link is incomplete.",
+    "err_403": "This page is out of date: the app may have restarted. Reload the page and try again.",
+    "err_422": "A value in the request is not valid.",
+    "err_other": "An unexpected answer (HTTP %s). Reload the page and try again.",
+    "err_detail": "Technical detail",
+    "err_home": "Back to the overview",
+    "js_err_stale": "Nothing was done: this page is out of date (the app may have restarted). Reload the page and try again.",
+    "js_err_offline": "Nothing was done: the app could not be reached. Is forge ui or forge app still running?",
+    "js_err_other": "Nothing was done: an unexpected answer (HTTP %s). Reload the page and try again.",
+    "js_reload": "Reload the page",
+    "js_close": "Close",
     "run_gallery": "Open in the gallery",
     "run_sub": "%s export(s), %s approved.",
     "run_hash_note": "A decision is stored in review.json with the file's SHA-256; a re-render voids it. Publishing stays on the command line and refuses approved exports that failed QA unless you give a reason:",
@@ -845,10 +876,12 @@ _EN: dict[str, Any] = {
     "pf_empty": "No performance data yet",
     "pf_empty_bd": "Upload a network's CSV export or import from the Meta / AppLovin API. This page never creates the store.",
     "pf_store": "Store:",
-    "pl_sub": "Playable ads checked against each network's rules. Output of forge playable check --json is read from here.",
+    "pl_sub": "Playable ads checked against each network's rules: the forge playable check --json files in the playables folder.",
     "pl_findings": "Findings",
     "pl_all_pass": "%s rules passed",
     "pl_source": "source",
+    "pl_source_col": "Source",
+    "pl_source_of": "%s rules (opens in a new tab)",
     "pl_pass": "pass",
     "pl_warn": "warn",
     "pl_uncertain": "uncertain",
@@ -872,7 +905,7 @@ _EN: dict[str, Any] = {
     "pl_mraid_unverified": "not verified",
     "cp_badge": "everything is created paused",
     "cp_sub": "App-install campaigns on Meta, TikTok and Google Ads from approved, QA-clean creatives. Preparing spends nothing; switching on is a separate step with a typed confirmation.",
-    "cp_error": "Refused",
+    "cp_error": "Not completed",
     "cp_created": "Ready: %s new object(s) created, %s already existed. All of them paused.",
     "cp_pack": "Manual upload pack:",
     "cp_stopped": "%s stopped",
@@ -952,6 +985,8 @@ _EN: dict[str, Any] = {
     "cp_demo_bd": "Render, QA, approve, deliver, a paused campaign on the mock network, a typed activation, 10 noisy simulated days, delivery data, kill / scale recommendations. No key, no money, no network.",
     "cp_demo_running": "trial running",
     "cp_demo_done": "trial finished",
+    "cp_demo_open": "See the trial's creatives",
+    "cp_demo_last": "An earlier trial's output is still here.",
     "cp_demo_failed": "trial failed",
     "cp_demo_run": "Start the trial",
     "cp_how": "How it works",
@@ -1100,3 +1135,117 @@ def review_error(message: str, lang: str) -> str:
     if "is not an export of this run" in message:
         return t.err_not_export
     return message
+
+
+# The engine's errors a page can show (test cells, store links, campaign configs, the campaign engine), in Turkish.
+# Each pattern must match a whole message, or one "; "-separated part of it; anything unknown is shown unchanged.
+_TR_ERRORS: list[tuple[str, str]] = [
+    # test cells (perf/cells.py)
+    (r"a test needs a name", "Teste bir ad ver."),
+    (r"the name is longer than 120 characters", "Test adı 120 karakterden uzun."),
+    (r"a test runs on one network", "Bir ağ seç; test tek ağda okunur."),
+    (r"a test needs a control creative", "Bir kontrol kreatifi seç."),
+    (r"a test needs at least one variant", "En az bir varyant seç."),
+    (r"at most (\d+) variants per test", r"Bir testte en fazla \1 varyant olabilir."),
+    (r"the control cannot also be a variant", "Kontrol kreatifi aynı zamanda varyant olamaz."),
+    (r"metric must be one of (.+)", r"Ölçüt şunlardan biri olmalı: \1."),
+    (r"scale_pct must be above 0 and at most 500", "Ölçekleme farkı 0'dan büyük ve en fazla 500 olmalı."),
+    (r"kill_pct must be between 0 and 100", "Durdurma farkı 0 ile 100 arasında olmalı."),
+    (r"screen_installs must be at least 1 and at most decide_installs", "İlk eleme en az 1 kurulum olmalı ve karar eşiğini aşmamalı."),
+    (r"decide_installs is too large", "Karar eşiği çok büyük."),
+    (r"confidence must be at least 0\.5 and below 1", "Güven en az %50 olmalı ve %100'ün altında kalmalı."),
+    (r"the rule text is longer than 2000 characters", "Kural metni 2000 karakterden uzun."),
+    (r"the test has started; its rule is locked", "Test başladı; kuralı kilitli, değiştirilemez."),
+    (r"the test has already started", "Test zaten başladı."),
+    (r"only a running test can be closed", "Yalnız süren bir test kapatılabilir."),
+    (r"a test cannot end before it started", "Test, başladığı günden önce kapatılamaz."),
+    (r"a started test cannot be deleted", "Başlamış bir test silinemez; kapatabilirsin."),
+    (r"no test cell (\d+)", r"\1 numaralı test yok."),
+    # store links (campaigns/store_url.py)
+    (r"no store URL", "Mağaza bağlantısı boş."),
+    (r"'.*' contains the placeholder '(.+)'; put the published store listing here", r"Bağlantıda yer tutucu var (\1): mağazada yayımlanmış uygulama sayfasının bağlantısını yapıştır."),
+    (r"'.*': a store URL must be https", "Mağaza bağlantısı https:// ile başlamalı."),
+    (r"'.*': a Google Play listing is .*", "Google Play bağlantısı play.google.com/store/apps/details?id=<paket adı> biçiminde olmalı."),
+    (r"'.*': id= must be one Android package name.*", "id= tek bir Android paket adı olmalı (örneğin com.studio.game)."),
+    (r"'.*': an App Store listing is .*", "App Store bağlantısı apps.apple.com/<ülke>/app/<ad>/id<rakamlar> biçiminde olmalı."),
+    (r"'.*': id(\d+) is a run of one digit.*", r"id\1 tek bir rakamın tekrarı; gerçek bir App Store kimliği değil."),
+    (r"'.*': not a Google Play or App Store listing", "Bu bir Google Play ya da App Store uygulama sayfası değil."),
+    (r"platform is (\w+) but '.*' is a (\w+) listing", r"Yapılandırmadaki platform \1, ama bağlantı bir \2 sayfası."),
+    # campaign config (campaigns/config.py) and the Kampanya page's starter form
+    (r"pick a `forge publish` folder", "Bir teslim klasörü seç (forge publish çıktısı)."),
+    (r"budget\.daily (\S+) is above limits\.max_daily (\S+)", r"Günlük bütçe (\1), günlük üst sınırın (\2) üstünde."),
+    (r"budget\.total_cap (\S+) is above limits\.max_total (\S+)", r"Toplam tavan (\1), toplam üst sınırın (\2) üstünde."),
+    (r"budget\.total_cap is below one day of budget\.daily", "Toplam tavan, bir günlük bütçeden az."),
+    (r"budget\.start (\S+) is in the past", r"Başlangıç günü (\1) geçmişte kalmış."),
+    (r"countries are ISO 3166-1 alpha-2 codes.*", "Ülkeler iki harfli ISO kodlarıyla yazılmalı (TR, US, DE)."),
+    (r"currency is an ISO 4217 code.*", "Para birimi üç harfli ISO koduyla yazılmalı (USD, EUR, TRY)."),
+    (r"name is 2-41 characters.*", "Kampanya adı 2-41 karakter olmalı: a-z, 0-9 ve '-'."),
+    # the campaign engine
+    (r"confirmation does not match; type exactly: (.+)", r"Onay ifadesi tutmadı; hiçbir şey değişmedi. Tam olarak şunu yaz: \1"),
+    (r"(\S+) is already active", r"\1 zaten yayında."),
+    (r"(\S+) ended on (\S+); create a new campaign instead", r"\1 kampanyası \2 tarihinde bitti; yeni bir kampanya hazırla."),
+    (r"(\S+): daily (\S+) / total (\S+) is above the limits (\S+) / (\S+)", r"\1: günlük \2 / toplam \3, üst sınırların (\4 / \5) üstünde; hiçbir şey değişmedi."),
+    (r"plan has problems, nothing was created: (.+)", r"Planda sorun var, hiçbir şey oluşturulmadı: \1"),
+    (r"(\w+) is in live mode: real money\..*", r"\1 CANLI hesap modunda: gerçek para harcanır. Yazmak için canlı hesap onay kutusunu işaretle."),
+    (r"no campaign '(.+)' in .*", r"'\1' adlı bir kampanya kayıtlı değil."),
+    (r"(.+) needs (\S+) in the environment.*", r"\1 için \2 ortam değişkeni gerekli (YAML dosyasına, komut satırına ya da başka bir dosyaya yazılmaz)."),
+    (r"(\w+): gave up after (\d+) attempts: (.+)", r"\1: \2 denemeden sonra vazgeçildi: \3"),
+    # a CSV upload (perf/csvimport.py); the column names are the import's own field names
+    (r"no column for (.+) \(have: (.*)\); map one with --column FIELD=HEADER", r"Gerekli sütun bulunamadı: \1 (dosyadaki sütunlar: \2). Raporu tarih, reklam adı ve gösterim sütunlarıyla yeniden dışa aktar; başlıklar farklıysa komut satırında forge perf import csv --column ALAN=BAŞLIK ile eşle."),
+    (r"(.+): not UTF-8 or UTF-16; export the report as CSV \(UTF-8\)", r"\1 UTF-8 ya da UTF-16 değil; raporu CSV (UTF-8) olarak yeniden dışa aktar."),
+    (r"line (\d+): cannot read date '(.*)' \(use YYYY-MM-DD\)", r"\1. satırdaki tarih okunamadı ('\2'); YYYY-AA-GG biçimini kullan."),
+]  # fmt: skip
+# Field names in a pydantic error ("budget.daily: Input should be greater than 0"), and its generic messages.
+_TR_FIELDS = {
+    "budget.daily": "Günlük bütçe",
+    "budget.total_cap": "Toplam tavan",
+    "budget.start": "Başlangıç günü",
+    "limits.max_daily": "Günlük üst sınır",
+    "limits.max_total": "Toplam üst sınır",
+    "countries": "Ülkeler",
+    "currency": "Para birimi",
+    "name": "Kampanya adı",
+    "store_url": "Mağaza bağlantısı",
+}
+_TR_PYDANTIC: list[tuple[str, str]] = [
+    (r"Input should be greater than 0", "0'dan büyük bir sayı olmalı."),
+    (r"Input should be a valid (number|integer).*", "geçerli bir sayı olmalı."),
+    (r"List should have at least 1 item.*", "en az bir değer gir."),
+    (r"Field required", "boş bırakılamaz."),
+]
+
+
+def _match(text: str, table: list[tuple[str, str]]) -> str | None:
+    for pattern, template in table:
+        m = re.fullmatch(pattern, text, flags=re.S)
+        if m:
+            return m.expand(template)
+    return None
+
+
+def _tr_part(part: str) -> str | None:
+    s = re.sub(r"^config: ", "", part.strip())
+    field = re.fullmatch(r"([a-z_]+(?:\.[a-z_]+)?): (?:Value error, )?(.*)", s, flags=re.S)
+    if field and field.group(1) in _TR_FIELDS:
+        rest = field.group(2)
+        generic = _match(rest, _TR_PYDANTIC)
+        if generic:
+            return f"{_TR_FIELDS[field.group(1)]}: {generic}"
+        return _match(rest, _TR_ERRORS)
+    return _match(re.sub(r"^Value error, ", "", s), _TR_ERRORS)
+
+
+def ui_error(message: str, lang: str) -> str:
+    """An engine error in the page's language. Turkish pages get a Turkish sentence for every message the forms can
+    trigger; an unknown message, or one part of it, is shown unchanged (the page also shows the original)."""
+    message = review_error(message, lang)
+    if lang != "tr":
+        return message
+    whole = _match(message.strip(), [(p, t) for p, t in _TR_ERRORS if "; " in p])  # sentences that contain "; "
+    if whole is not None:
+        return whole
+    parts = [p for p in message.split("; ") if p.strip()]
+    done = [_tr_part(p) for p in parts]
+    if all(done):
+        return " ".join(str(d) for d in done)
+    return "; ".join(d or p for d, p in zip(done, parts, strict=True))

@@ -19,12 +19,12 @@
     <form method="post" action="/tests/{{ cell.id }}/close" data-confirm="{{ t.tc_close_confirm }}">
       <input type="hidden" name="token" value="{{ token }}"><button class="btn" type="submit">{{ t.tc_close }}</button></form>
   {% endif %}
-  <p class="sub">{{ cell.network }} · {{ t["m_" ~ cell.metric] }} · {{ t.tc_created }} {{ cell.created_at|when(lang) }}{% if cell.started_on %} · {{ t.tc_window }} {{ cell.started_on }} → {{ cell.ended_on or t.today }}{% endif %}</p>
+  <p class="sub">{{ cell.network }} · {{ t["m_" ~ cell.metric] }} · {{ t.tc_created }} {{ cell.created_at|when(lang) }}{% if cell.started_on %} · {{ t.tc_window }} {{ cell.started_on|when(lang) }} → {{ cell.ended_on|when(lang) if cell.ended_on else t.today }}{% endif %}</p>
 </div>
-{% if error %}<div class="callout bad" role="alert">{{ ic.icon("alert") }}<div>{{ error }}</div></div>{% endif %}
+{% if error %}<div class="callout bad" role="alert">{{ ic.icon("alert") }}<div>{{ m.err(error, t, lang) }}</div></div>{% endif %}
 {% if cell.tampered %}<div class="callout bad" role="alert">{{ ic.icon("alert") }}<div><b>{{ t.tc_tampered }}</b> {{ t.tc_tampered_bd }}</div></div>{% endif %}
 {% if cell.status == "draft" %}<div class="callout warn">{{ ic.icon("info") }}<div>{{ t.tc_draft_note }}</div></div>
-{% elif cell.status == "running" and not r.has_data %}<div class="callout">{{ ic.icon("clock") }}<div>{{ t.tc_no_data|format(cell.network, cell.started_on) }} <a href="/settings#import">{{ t.st_perf_btn }}</a></div></div>{% endif %}
+{% elif cell.status == "running" and not r.has_data %}<div class="callout">{{ ic.icon("clock") }}<div>{{ t.tc_no_data|format(cell.network, cell.started_on|when(lang)) }} <a href="/settings#import">{{ t.st_perf_btn }}</a></div></div>{% endif %}
 
 <div class="grid c2 test-top">
   <section class="card rule-card">
@@ -48,7 +48,7 @@
     </div>
     <ul class="list outcomes">
       {% for o in r.outcomes %}{% set k = lookup.get(o.arm.creative_id) %}
-      <li><span class="lbl">{{ t.tc_variant }} {{ loop.index }}</span><span class="grow">{{ k.concept if k and k.concept else o.arm.creative_id }} <span class="muted small">{{ k.variant if k else "" }}</span></span>
+      <li><span class="lbl">{{ t.tc_variant }} {{ loop.index }}</span><span class="grow">{{ k.concept if k and k.concept else o.arm.creative_id }} <span class="muted small">{% if k %}{{ k.format }}{% if k.variant %} · {{ k.variant }}{% endif %}{% endif %}</span></span>
         {% if cell.status == "draft" %}<span class="badge dashed">{{ t.cs_draft }}</span>{% elif o.verdict == "pending" %}<span class="badge dashed">{{ t.oc_pending }}</span>{% else %}{{ m.outcome_badge(o, t) }}{% endif %}</li>
       {% endfor %}
     </ul>

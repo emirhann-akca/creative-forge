@@ -166,3 +166,24 @@ pre.cmd { text-align: left; margin: 8px auto 6px; max-width: 760px; padding: 9px
   .filters .select { max-width: 100%; flex: 1 1 140px; }
   .page-head h1 { font-size: 18px; }
 }
+
+/* an engine error's original text, folded under the translated sentence */
+details.tech { margin-top: 6px; }
+details.tech summary { cursor: pointer; font-size: 11.5px; color: var(--text-3); }
+details.tech code { display: block; margin-top: 4px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11.5px; }
+.empty details.tech { max-width: 560px; margin: 0 auto 12px; text-align: left; }
+
+/* a failed htmx action (forge.js) */
+.toast { position: fixed; right: 16px; bottom: 16px; z-index: 80; width: min(420px, calc(100vw - 32px)); padding: 12px 14px;
+  background: var(--panel); color: var(--text); border: 1px solid var(--bad); border-radius: var(--r-3); box-shadow: var(--shadow-pop); font-size: 13px; }
+.toast p { margin: 0 0 10px; }
+.btn[disabled], .btn.htmx-request { opacity: .6; cursor: progress; }
+
+/* phones: every section in two short columns instead of a nested scroll box that fills the first screen */
+@media (max-width: 760px) {
+  .sidebar .scroll { max-height: none; overflow: visible; display: grid; grid-template-columns: 1fr 1fr; gap: 2px 6px; padding-bottom: 6px; }
+  .sidebar .nav-h { display: none; }
+  .sidebar .search kbd { display: none; }
+}
+/* a section opened by its #anchor (a redirect after a form) is not hidden under the settings page's sticky tabs */
+section.card[id] { scroll-margin-top: 64px; }

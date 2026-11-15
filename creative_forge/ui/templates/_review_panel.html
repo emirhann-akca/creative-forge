@@ -7,5 +7,6 @@
   {% if c.rec.failed %}<p class="callout bad small">{{ t.rv_failed_warn|format(c.rec.failed|join(", ")) }}</p>{% endif %}
   {% set view = "detail" %}{% set loop_id = "d" %}
   {% include "_review_form.html" %}
-  <p class="muted small">{{ t.rv_publish_hint }} <code>forge publish "{{ run.path }}" --to deliver</code></p>
+  <p class="muted small">{{ t.rv_publish_hint }} <code>forge publish "{{ run.path }}" --to "{{ root }}/deliver"</code></p>
 </article>
+{% if oob %}<span id="hdr-review" hx-swap-oob="true">{{ m.review_badge(c.review, t) }}</span>{% endif %}

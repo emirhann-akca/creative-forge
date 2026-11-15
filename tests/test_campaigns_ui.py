@@ -86,7 +86,8 @@ def test_the_preview_the_primary_button_and_the_typed_activation(root, tmp_path)
     recs = {r.network: r for r in CampaignState(tmp_path / "state").campaigns()}
     meta = recs["meta"].ref
     wrong = c.post("/campaigns/activate", data={"token": TOKEN, "config": "spring.yaml", "ref": meta, "phrase": "evet"})
-    assert wrong.status_code == 409 and "Reddedildi" in wrong.text and "type exactly" in wrong.text
+    assert wrong.status_code == 409 and "İşlem tamamlanmadı" in wrong.text and "Onay ifadesi tutmadı" in wrong.text
+    assert "type exactly" in wrong.text  # the engine's own words, folded under "Teknik ayrıntı"
     assert CampaignState(tmp_path / "state").campaign(meta).status == "PAUSED"
     on = c.post("/campaigns/activate", data={"token": TOKEN, "config": "spring.yaml", "ref": meta,
                 "phrase": "YAYINA AL 40.00 USD"})  # fmt: skip
@@ -131,3 +132,50 @@ def test_turkish_and_english_pages_and_the_demo_button(root, tmp_path):
     assert started.status_code == 200 and "campaign-demo" in started.text
     c.app.state.campaign_demo.wait(30)
     assert "demo ok" in c.get("/campaigns/demo/status").text
+    assert "Denemenin kreatiflerini gör" not in c.get("/campaigns/demo/status").text  # nothing rendered yet
+    (root / "campaign-demo" / "render").mkdir(parents=True)
+    (root / "campaign-demo" / "render" / "report.json").write_text("{}", encoding="utf-8")
+    assert 'href="/creatives?run=campaign-demo%2Frender"' in c.get("/campaigns/demo/status").text
+    after_restart = client(root, tmp_path / "again").get("/campaigns").text  # a new process: the demo is idle
+    assert "Önceki denemenin çıktısı duruyor." in after_restart and "campaign-demo%2Frender" in after_restart
+
+
+def test_starter_errors_are_turkish_and_the_form_keeps_what_was_chosen(root, tmp_path):
+    deliver(root / "second" / "deliver")
+    c = client(root, tmp_path)
+    form = {"token": TOKEN, "deliver": "second/deliver", "daily": "50", "total_cap": "400", "max_daily": "30",
+            "max_total": "300", "countries": "TUR",
+            "store_url": "https://play.google.com/store/apps/details?id=DOLDUR"}  # fmt: skip
+    page = visible(c.post("/campaigns/starter", data=form).text)
+    assert "Bağlantıda yer tutucu var (doldur)" in page
+    real = "https://play.google.com/store/apps/details?id=com.forgetest.sortgame"
+    over = c.post("/campaigns/starter", data={**form, "store_url": real})
+    assert over.status_code == 422 and "Ülkeler iki harfli ISO kodlarıyla yazılmalı" in over.text
+    assert '<option value="second/deliver" selected>' in over.text
+    over = c.post("/campaigns/starter", data={**form, "countries": "TR", "store_url": real})
+    assert "Günlük bütçe (50), günlük üst sınırın (30) üstünde." in over.text
+    assert "Toplam tavan (400), toplam üst sınırın (300) üstünde." in over.text
+
+
+def test_each_campaign_action_redirects_so_a_reload_never_repeats_it(root, tmp_path):
+    write_config(root)
+    c = client(root, tmp_path)
+    made = c.post("/campaigns/prepare", data={"token": TOKEN, "config": "spring.yaml"}, follow_redirects=False)
+    assert made.status_code == 303 and made.headers["location"].startswith("/campaigns?config=spring.yaml&m=")
+    assert "33 yeni nesne" in c.get(made.headers["location"]).text
+    assert "33 yeni nesne" not in c.get(made.headers["location"]).text  # a reload shows the page, not the result again
+    meta = {r.network: r for r in CampaignState(tmp_path / "state").campaigns()}["meta"]
+    on = c.post("/campaigns/activate", data={"token": TOKEN, "config": "spring.yaml", "ref": meta.ref,
+                "phrase": "yayına al 40,00 usd"}, follow_redirects=False)  # fmt: skip
+    assert on.status_code == 303 and on.headers["location"].endswith("#status")
+    shown = c.get(on.headers["location"]).text
+    status = shown[shown.index('id="status"') :]
+    assert "yayında.</b>" in status and "yayında.</b>" not in shown[: shown.index('id="status"')]  # next to the table
+    again = c.post("/campaigns/activate", data={"token": TOKEN, "config": "spring.yaml", "ref": meta.ref,
+                   "phrase": "YAYINA AL 40.00 USD"})  # fmt: skip
+    assert again.status_code == 409 and "zaten yayında" in again.text
+    for action in ("pause", "sync"):
+        r = c.post(f"/campaigns/{action}", data={"token": TOKEN, "config": "spring.yaml", "ref": meta.ref},
+                   follow_redirects=False)  # fmt: skip
+        assert r.status_code == 303 and r.headers["location"].endswith("#status"), action
+    assert CampaignState(tmp_path / "state").campaign(meta.ref).status == "PAUSED"

@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% import "_icons.html" as ic %}
+{% import "_macros.html" as m %}
 {% block title %}{{ t.cmd_new_test }}{% endblock %}
 {% block body %}
 <nav class="crumbs" aria-label="{{ t.breadcrumb }}"><a href="/tests">{{ t.nav_tests }}</a> / <span>{{ t.cmd_new_test }}</span></nav>
@@ -7,7 +8,7 @@
   <h1>{{ t.cmd_new_test }}</h1>
   <p class="sub">{{ t.tn_sub }}</p>
 </div>
-{% if error %}<div class="callout bad" role="alert">{{ ic.icon("alert") }}<div><b>{{ t.tn_error }}</b> {{ error }}</div></div>{% endif %}
+{% if error %}<div class="callout bad" role="alert">{{ ic.icon("alert") }}<div><b>{{ t.tn_error }}</b> {{ m.err(error, t, lang) }}</div></div>{% endif %}
 {% if not known %}
 <section class="card"><div class="empty">
   <div class="ic">{{ ic.icon("film") }}</div><h3>{{ t.tn_no_creatives }}</h3><p>{{ t.tn_no_creatives_bd }}</p>

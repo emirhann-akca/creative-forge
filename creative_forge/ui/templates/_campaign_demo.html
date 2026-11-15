@@ -3,7 +3,11 @@
   {% if cdemo.state == "running" %}
     <p class="row"><span class="badge warn"><span class="dot warn live"></span>{{ t.cp_demo_running }}</span></p>
   {% elif cdemo.state == "done" %}
-    <p class="row"><span class="badge good">{{ t.cp_demo_done }}</span> <span class="muted small mono">{{ cdemo.out_dir }}</span></p>
+    <p class="row"><span class="badge good">{{ t.cp_demo_done }}</span> <span class="muted small mono">{{ cdemo.out_dir }}</span>
+      {% if cdemo_rid %}<a class="btn sm" href="/creatives?run={{ cdemo_rid|q }}">{{ t.cp_demo_open }} {{ ic.icon("arrow") }}</a>{% endif %}</p>
+  {% elif cdemo.state == "idle" and cdemo_rid %}
+    <p class="row"><span class="muted small">{{ t.cp_demo_last }}</span>
+      <a class="btn sm" href="/creatives?run={{ cdemo_rid|q }}">{{ t.cp_demo_open }} {{ ic.icon("arrow") }}</a></p>
   {% elif cdemo.state == "failed" %}
     <p class="row"><span class="badge bad">{{ t.cp_demo_failed }}</span> <span class="muted">{{ t.exit_code }} {{ cdemo.returncode }}</span></p>
   {% endif %}

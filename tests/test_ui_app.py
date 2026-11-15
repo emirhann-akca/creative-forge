@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 
 from creative_forge.naming import CreativeIds
 from creative_forge.perf.cells import (
+    CELL_METRICS,
     DECIDED,
     KEEP,
     KILL,
@@ -479,3 +480,146 @@ def test_command_palette_lists_pages_runs_and_tests(client, db):
     hrefs = {c["href"] for c in data}
     assert {"/", "/creatives", "/tests", "/settings", "/runs/spring", "/tests/1"} <= hrefs
     assert any(c["label"] == "palet testi" for c in data)
+
+
+# ----------------------------------------------------------------------------- what a person in a browser runs into
+HTML = {"Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"}  # a browser's navigation
+
+
+def test_engine_errors_read_as_a_turkish_sentence_with_the_original_folded_away(client, db):
+    form = {"name": "x", "network": "meta", "control": A.creative_id, "variants": [A.creative_id],
+            "scale_pct": "20", "kill_pct": "20", "screen_installs": "50", "decide_installs": "200",
+            "confidence": "95", "token": TOKEN}  # fmt: skip
+    tr = client.post("/tests", data=form)
+    assert tr.status_code == 422 and "Kontrol kreatifi aynı zamanda varyant olamaz." in tr.text
+    assert "Teknik ayrıntı" in tr.text  # the engine's own sentence, for a bug report
+    en = client.post("/tests?lang=en", data=form)
+    assert "the control cannot also be a variant" in en.text and "Kontrol kreatifi" not in en.text
+
+
+def test_every_message_the_forms_can_trigger_has_a_turkish_sentence(tmp_path):
+    from creative_forge.campaigns.config import CampaignConfigError, parse_config
+    from creative_forge.campaigns.store_url import StoreUrlError, parse_store_url
+    from creative_forge.ui.app import STARTER_NETWORKS
+    from creative_forge.ui.i18n import ui_error
+
+    found = Rule(scale_pct=0, kill_pct=100, screen_installs=500, decide_installs=2_000_000, confidence=1,
+                 text="x" * 2001).problems()  # fmt: skip
+    store = CellStore(tmp_path / "cells.sqlite")
+    for args in [("", "", "", []), ("x" * 121, "meta", "a", ["a", "b", "c", "d", "e"])]:
+        with pytest.raises(CellError) as e:
+            store.create(*args, Rule())
+        found += str(e.value).split("; ")
+    for url in ["", "http://play.google.com/store/apps/details?id=com.a.b", "https://play.google.com/store/x",
+                "https://play.google.com/store/apps/details?id=nopackage", "https://apps.apple.com/tr/app/x",
+                "https://apps.apple.com/tr/app/x/id1111111", "https://example.org/app/TODO",
+                "https://store.steampowered.com/app/1"]:  # fmt: skip
+        with pytest.raises(StoreUrlError) as e:
+            parse_store_url(url)
+        found.append(str(e.value))
+    base = {"version": 1, "name": "kampanya-1", "creatives": "../deliver", "platform": "android", "currency": "USD",
+            "store_url": "https://play.google.com/store/apps/details?id=com.studio.game", "countries": ["TR"],
+            "budget": {"daily": 20, "total_cap": 200}, "limits": {"max_daily": 30, "max_total": 300},
+            "networks": STARTER_NETWORKS}  # fmt: skip
+    for change in [{"budget": {"daily": 50, "total_cap": 400}}, {"budget": {"daily": 20, "total_cap": 10}},
+                   {"budget": {"daily": -1, "total_cap": 200}}, {"countries": []}, {"countries": ["TUR"]},
+                   {"currency": "usd"}, {"name": "Kampanya 1"}]:  # fmt: skip
+        with pytest.raises(CampaignConfigError) as e:
+            parse_config({**base, **change}, tmp_path)
+        found.append(str(e.value))
+    found += ["confirmation does not match; type exactly: YAYINA AL 40.00 USD", "abc:meta is already active",
+              "abc:meta ended on 2026-11-01; create a new campaign instead",
+              "meta is in live mode: real money. Pass --live (CLI) or tick the live box (UI) to write to it",
+              "abc:meta: daily 40.00 / total 400.00 is above the limits 30.00 / 300.00",
+              "a started test cannot be deleted", "only a running test can be closed"]  # fmt: skip
+    for message in found:
+        turkish = ui_error(message, "tr")
+        assert turkish != message and not re.search(r"\b(must|should|is above|needs|cannot)\b", turkish), message
+        assert ui_error(message, "en") == message
+    assert ui_error("something new from a network", "tr") == "something new from a network"  # unknown: unchanged
+
+
+@pytest.mark.parametrize("metric", CELL_METRICS)
+def test_the_rule_written_from_the_thresholds_reads_for_every_metric(client, db, metric):
+    form = {"name": f"t {metric}", "network": "meta", "metric": metric, "control": A.creative_id,
+            "variants": [OOPS.creative_id], "scale_pct": "20", "kill_pct": "20", "screen_installs": "50",
+            "decide_installs": "200", "confidence": "95", "text": "", "start": "0", "token": TOKEN}  # fmt: skip
+    assert client.post("/tests", data=form, follow_redirects=False).status_code == 303
+    text = CellStore(db).list()[0].rule.text
+    assert text.startswith(f"Ölçüt: {T['tr']['m_' + metric]}. Varyant") and "'de " not in text
+
+
+def test_a_decision_updates_the_page_header_too(client, root):
+    first, second = f"{A.ad_name}.mp4", f"{OOPS.ad_name}.mp4"
+    assert 'id="hdr-review"' in client.get(f"/runs/spring/exports/{first}").text
+    assert 'id="run-counts"' in client.get("/runs/spring").text
+    detail = client.post("/runs/spring/review", data={"file": first, "decision": "approve", "view": "detail"},
+                         headers={"X-Forge-Token": TOKEN})  # fmt: skip
+    oob = re.search(r'<span id="hdr-review" hx-swap-oob="true">(.*?)</span>\s*$', detail.text, re.S)
+    assert oob and "Onaylı" in oob.group(1)
+    card = client.post("/runs/spring/review", data={"file": second, "decision": "approve"},
+                       headers={"X-Forge-Token": TOKEN})  # fmt: skip
+    assert '<span id="run-counts" hx-swap-oob="true">3 kopya, 2 onaylı.</span>' in card.text
+    assert "Kaydedildi" in card.text
+    refused = client.post("/runs/spring/review", headers={"X-Forge-Token": TOKEN},
+                          data={"file": second, "decision": "reject", "note": " ", "reviewer": "ayşe"})  # fmt: skip
+    assert refused.status_code == 422 and 'value="ayşe"' in refused.text and "hx-swap-oob" not in refused.text
+    assert 'hx-disabled-elt="find button"' in client.get("/runs/spring").text  # no double posts
+
+
+def test_a_browser_gets_an_error_page_not_json(client):
+    page = client.get("/tests/999", headers=HTML)
+    assert page.status_code == 404 and "<html" in page.text and '"detail"' not in page.text
+    assert "Aradığın sayfa ya da kayıt yok" in page.text and 'href="/"' in page.text
+    assert "default-src 'self'" in page.headers["content-security-policy"]  # the guard's headers stay
+    assert client.get("/tests/999").json() == {"detail": "no such test"}  # anything but a page view: JSON as before
+    assert "İstekteki bir değer geçersiz" in client.get("/tests/abc", headers=HTML).text
+    stale = client.post("/runs/spring/review", data={"token": "from-before-a-restart"}, headers=HTML)
+    assert stale.status_code == 403 and "Sayfa eskimiş" in stale.text  # a plain form on a page from before a restart
+    assert "does not exist" in client.get("/runs/nope?lang=en", headers=HTML).text
+
+
+def test_a_form_address_opened_directly_leads_back_to_its_page(client):
+    for path, page in [("/campaigns/prepare", "/campaigns"), ("/campaigns/activate", "/campaigns"),
+                       ("/campaigns/sync", "/campaigns"), ("/campaigns/demo", "/campaigns#demo"),
+                       ("/settings/import", "/settings#import"), ("/tests/7/close", "/tests/7"),
+                       ("/demo", "/")]:  # fmt: skip
+        r = client.get(path, follow_redirects=False)
+        assert r.status_code == 303 and r.headers["location"] == page, path
+    assert client.get("/campaigns/nope", follow_redirects=False).status_code == 404
+
+
+def test_an_upload_redirects_to_its_result_which_a_reload_does_not_repeat(tmp_path, root):
+    c = client_for(root, tmp_path / "fresh.sqlite", tmp_path)
+    csv = f"Date,Ad name,Impressions,Installs\n2026-11-10,{A.ad_name},1000,9\n"
+    r = c.post("/settings/import", data={"network": "tiktok", "token": TOKEN},
+               files={"file": ("ekim.csv", csv.encode("utf-8"), "text/csv")}, follow_redirects=False)  # fmt: skip
+    where = r.headers["location"]
+    assert r.status_code == 303 and where.startswith("/settings?m=") and where.endswith("#import")
+    assert "1 satır içe aktarıldı" in c.get(where).text
+    assert "satır içe aktarıldı" not in c.get(where).text  # shown once: a reload is a plain page
+    bad = c.post("/settings/import", data={"network": "tiktok", "token": TOKEN},
+                 files={"file": ("x.csv", b"foo,bar\n1,2\n", "text/csv")})  # fmt: skip
+    assert bad.status_code == 422 and "data-focus" in bad.text and "Gerekli sütun bulunamadı" in bad.text
+
+
+def test_the_footer_says_who_can_reach_the_page(root, tmp_path):
+    local = client_for(root, tmp_path / "p.sqlite", tmp_path).get("/").text
+    assert "yalnız bu bilgisayardan sunuluyor" in local
+    app = create_app(root, token=TOKEN, perf_db=tmp_path / "p.sqlite", poster_cache=tmp_path / "posters",
+                     allowed_hosts=None, access_token="a" * 32)  # fmt: skip
+    lan = TestClient(app, base_url="http://192.168.1.20:8765").get("/", headers={"Authorization": "Bearer " + "a" * 32})
+    assert "ağdan erişilebilir" in lan.text and "yalnız bu bilgisayardan" not in lan.text
+
+
+def test_small_things_a_reader_meets(client, root):
+    deliver = f'--to "{root.resolve()}/deliver"'  # where the Kampanya page looks for `forge publish` output
+    assert deliver in client.get("/runs/spring").text
+    assert deliver in client.get(f"/runs/spring/exports/{A.ad_name}.mp4").text
+    playables = client.get("/playables").text
+    assert 'aria-label="AppLovin kuralları (yeni sekmede açılır)"' in playables and "<th>Kaynak</th>" in playables
+    assert "<h2>Meta</h2>" in client.get("/perf").text  # the network's name, as in the imports table
+    home = client.get("/").text
+    assert "15 sn" not in home and 'data-err-stale="' in home and 'data-err-offline="' in home
+    js = (UI / "static" / "forge.js").read_text(encoding="utf-8")
+    assert "htmx:responseError" in js and "htmx:sendError" in js

@@ -143,7 +143,7 @@ def test_ui_performance_page(store, tmp_path):
     base = "http://127.0.0.1:8765"
     client = TestClient(create_app(tmp_path / "out", token="t", perf_db=store.path), base_url=base)
     page = client.get("/perf?lang=en")
-    assert page.status_code == 200 and "Per creative" in page.text and "<h2>meta</h2>" in page.text
+    assert page.status_code == 200 and "Per creative" in page.text and "<h2>Meta</h2>" in page.text  # its label
     assert "cf1.puzzle-ads.oops.wrong-move.lvl7.tryit.9x16.en.fc972ce8b2" in page.text and "winner" in page.text
     assert "kazanan" in client.get("/perf?lang=tr").text  # Turkish by default, the same verdicts
     assert client.get("/perf?metric=nope").status_code == 422

@@ -9,9 +9,9 @@
   <span class="spacer"></span>
   {% if has_report %}<a class="btn" href="/runs/{{ run.rid|qp }}/report.html" target="_blank" rel="noopener">{{ t.qa_report }} {{ ic.icon("external") }}</a>{% endif %}
   <a class="btn" href="/creatives?run={{ run.rid|q }}">{{ t.run_gallery }}</a>
-  <p class="sub">{{ t.run_sub|format(run.exports|length, run.approved) }} <span class="mono muted">{{ run.path }}</span></p>
+  <p class="sub"><span id="run-counts">{{ t.run_sub|format(run.exports|length, run.approved) }}</span> <span class="mono muted">{{ run.path }}</span></p>
 </div>
-<div class="callout info">{{ ic.icon("lock") }}<div>{{ t.run_hash_note }} <code>forge publish "{{ run.path }}" --to deliver</code></div></div>
+<div class="callout info">{{ ic.icon("lock") }}<div>{{ t.run_hash_note }} <code>forge publish "{{ run.path }}" --to "{{ root }}/deliver"</code></div></div>
 {% for c in creatives %}
   {% set error = None %}
   {% include "_export.html" %}

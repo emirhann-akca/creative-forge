@@ -18,7 +18,7 @@
       {% if r.cell.locked %}<span class="badge outline" data-tip="{{ t.tc_locked_tip }}">{{ ic.icon("lock") }} {{ t.tc_locked }}</span>{% endif %}
       {% if r.cell.tampered %}<span class="badge bad">{{ t.tc_tampered }}</span>{% endif %}
       <span class="spacer"></span>
-      <span class="muted small">{{ r.cell.network }} · {{ t["m_" ~ r.cell.metric] }}{% if r.since %} · {{ r.since }} → {{ r.cell.ended_on or t.today }}{% endif %}</span>
+      <span class="muted small">{{ r.cell.network }} · {{ t["m_" ~ r.cell.metric] }}{% if r.since %} · {{ r.since|when(lang) }} → {{ r.cell.ended_on|when(lang) if r.cell.ended_on else t.today }}{% endif %}</span>
     </header>
     {% include "_cell_table.html" %}
   </section>

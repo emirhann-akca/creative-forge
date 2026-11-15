@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% import "_icons.html" as ic %}
+{# A page instead of a bare {"detail": ...}: what went wrong, what to do, and the technical reason folded away. #}
+{% block title %}{{ t.err_title }}{% endblock %}
+{% block body %}
+<div class="page-head">
+  <h1>{{ t.err_title }} <span class="muted">HTTP {{ code }}</span></h1>
+</div>
+<section class="card"><div class="empty">
+  <div class="ic">{{ ic.icon("alert") }}</div>
+  <h3>{{ message }}</h3>
+  {% if detail %}<details class="tech"><summary>{{ t.err_detail }}</summary><code>{{ detail }}</code></details>{% endif %}
+  <div class="row center"><a class="btn primary" href="/">{{ t.err_home }}</a></div>
+</div></section>
+{% endblock %}

@@ -50,14 +50,17 @@ from typing import Any
 from urllib.parse import quote, urlencode
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from creative_forge import __version__
 from creative_forge.review import ExportRecord, ReviewError, decide, load_exports, load_review
 from creative_forge.ui import catalog, security
-from creative_forge.ui.i18n import LANGS, T, fmt_date, fmt_num, fmt_pct, fmt_prob, review_error
+from creative_forge.ui.i18n import LANGS, T, fmt_date, fmt_num, fmt_pct, fmt_prob, ui_error
 
 HERE = Path(__file__).resolve().parent
 TOKEN_HEADER = "X-Forge-Token"
@@ -259,6 +262,7 @@ def create_app(
     templates.env.filters["adname"] = catalog.ad_parts
     templates.env.filters["q"] = lambda s: quote(str(s), safe="")
     templates.env.filters["qp"] = lambda s: quote(str(s), safe="/")
+    templates.env.filters["uierr"] = ui_error
     templates.env.globals["qlink"] = qlink
     app = FastAPI(title="creative-forge", docs_url=None, redoc_url=None, openapi_url=None)
     app.mount("/static", StaticFiles(directory=str(HERE / "static")), name="static")
@@ -369,12 +373,53 @@ def create_app(
             "shell": shell,
             "is_mac": "Mac" in ua or "iPhone" in ua or "iPad" in ua,
             "path": request.url.path,
+            "network_mode": access_token is not None,  # reachable from other machines: the footer says so
             **ctx,
         }
         resp = templates.TemplateResponse(request, name, ctx, status_code=status_code)
         if request.query_params.get("lang") in LANGS:
             resp.set_cookie(LANG_COOKIE, lang, max_age=365 * 86400, samesite="lax", httponly=True)
         return resp
+
+    # A POST that succeeded answers with a redirect (Post/Redirect/Get), so a reload or the back button never sends
+    # it again; what it did travels as a one-time message under a random key in the URL.
+    flashes: dict[str, dict[str, Any]] = {}
+    flash_lock = threading.Lock()
+
+    def redirect_with(path: str, message: dict[str, Any], anchor: str = "", **params: str) -> RedirectResponse:
+        key = secrets.token_urlsafe(9)
+        with flash_lock:
+            flashes[key] = message
+            while len(flashes) > 32:
+                flashes.pop(next(iter(flashes)))
+        query = urlencode({k: v for k, v in {**params, "m": key}.items() if v})
+        return RedirectResponse(f"{path}?{query}{anchor}", status_code=303)  # a local path, never another site
+
+    def take_flash(key: str) -> dict[str, Any]:
+        with flash_lock:
+            return flashes.pop(key, {}) if key else {}
+
+    # ---------------------------------------------------------------------------------------------- error pages
+    def wants_html(request: Request) -> bool:
+        """A browser opening a page (not htmx, a video or a script): it gets a page it can read, not JSON."""
+        return "text/html" in request.headers.get("accept", "") and request.headers.get("hx-request") != "true"
+
+    def error_page(request: Request, status: int, detail: str) -> HTMLResponse:
+        t = T[lang_of(request)]
+        message = {404: t.err_404, 403: t.err_403, 422: t.err_422}.get(status) or t.err_other % status
+        return page(request, "error.html", status, code=status, message=message, detail=detail)
+
+    @app.exception_handler(StarletteHTTPException)
+    async def http_error(request: Request, exc: StarletteHTTPException) -> Response:
+        if not wants_html(request):
+            return await http_exception_handler(request, exc)
+        return error_page(request, exc.status_code, str(exc.detail))
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(request: Request, exc: RequestValidationError) -> Response:
+        if not wants_html(request):
+            return await request_validation_exception_handler(request, exc)
+        return error_page(request, 422, "; ".join(str(e.get("msg", "")) for e in exc.errors()))
 
     def demo_rid() -> str | None:
         try:
@@ -529,9 +574,11 @@ def create_app(
             if file not in {x.file for x in run.exports}:
                 raise HTTPException(422, str(e)) from e
             _, cr = creative_or_404(rid, file)
-            return page(request, view, 422, run=run, c=cr, error=review_error(str(e), lang_of(request)))
+            typed = {"form_note": str(form.get("note", "")), "form_reviewer": str(form.get("reviewer", ""))}
+            return page(request, view, 422, run=run, c=cr, error=ui_error(str(e), lang_of(request)), **typed)
         run, cr = creative_or_404(rid, file)
-        return page(request, view, run=run, c=cr, error=None, saved=True)
+        # oob: the page header's decision badge and approval count, swapped in place next to the card
+        return page(request, view, run=run, c=cr, error=None, saved=True, oob=True)
 
     @app.get("/runs/{rid:path}", response_class=HTMLResponse)
     def run_page(request: Request, rid: str) -> HTMLResponse:
@@ -683,6 +730,10 @@ def create_app(
             return test_view(request, cell_id, 409, error=str(e))
         return RedirectResponse(f"/tests/{int(cell_id)}", status_code=303)  # a local path, never another site
 
+    @app.get("/tests/{cell_id}/{action}")
+    def test_action_get(cell_id: int, action: str) -> RedirectResponse:  # a reload or bookmark of a form's address
+        return RedirectResponse(f"/tests/{int(cell_id)}", status_code=303)
+
     # ------------------------------------------------------------------------------------------------ performance
     @app.get("/perf", response_class=HTMLResponse)
     def perf_page(
@@ -711,6 +762,7 @@ def create_app(
             network=network,
             status=catalog.import_status(db),
             connections=CONNECTIONS,
+            net_labels={key: label for key, label, *_ in CONNECTIONS},
             lookup=creative_lookup()[1] if rep else {},
         )
 
@@ -764,6 +816,17 @@ def create_app(
             found += [m.parent.relative_to(root).as_posix() for m in root.glob(depth)]
         return sorted(set(found))
 
+    def camp_demo_rid() -> str | None:
+        """The run the campaign demo rendered (``<out>/render``), as the gallery's run filter, once it exists (also
+        one from before a restart of the app)."""
+        render = camp_demo.out_dir / "render"
+        if camp_demo.state == "running" or not (render / "report.json").is_file():
+            return None
+        try:
+            return render.relative_to(root).as_posix()
+        except ValueError:
+            return None
+
     def camp_engine(live: bool = False) -> Any:
         from creative_forge.campaigns.engine import CampaignEngine
 
@@ -810,12 +873,13 @@ def create_app(
             versions=VERSIONS,
             publish_dirs=publish_dirs(),
             cdemo=camp_demo,
+            cdemo_rid=camp_demo_rid(),
             **ctx,
         )
 
     @app.get("/campaigns", response_class=HTMLResponse)
-    def campaigns_page(request: Request, config: str = "") -> HTMLResponse:
-        return campaigns_view(request, config=config)
+    def campaigns_page(request: Request, config: str = "", m: str = "") -> HTMLResponse:
+        return campaigns_view(request, config=config, **take_flash(m))
 
     def camp_errors() -> tuple[type[BaseException], ...]:
         from creative_forge.campaigns.config import CampaignConfigError
@@ -829,7 +893,7 @@ def create_app(
                 ConfigError, ValueError)  # fmt: skip
 
     @app.post("/campaigns/prepare", response_class=HTMLResponse)
-    async def campaigns_prepare(request: Request) -> HTMLResponse:
+    async def campaigns_prepare(request: Request) -> Response:
         from creative_forge.campaigns.config import load_config
 
         form = await require_token(request)
@@ -845,11 +909,13 @@ def create_app(
         created = sum(n.created for n in rep.networks)
         existing = sum(n.existing + n.reconciled for n in rep.networks)
         stopped = [(n.network, n.stopped) for n in rep.networks if n.stopped]
-        return campaigns_view(request, 200 if not stopped else 409, config=path.name, created=(created, existing),
-                              stopped=stopped, packs=rep.packs)  # fmt: skip
+        if stopped:  # a network stopped part way: shown in place, with the reason
+            return campaigns_view(request, 409, config=path.name, created=(created, existing), stopped=stopped,
+                                  packs=rep.packs)  # fmt: skip
+        return redirect_with("/campaigns", {"created": (created, existing), "packs": rep.packs}, config=path.name)
 
     @app.post("/campaigns/activate", response_class=HTMLResponse)
-    async def campaigns_activate(request: Request) -> HTMLResponse:
+    async def campaigns_activate(request: Request) -> Response:
         from creative_forge.campaigns.config import load_config
 
         form = await require_token(request)
@@ -861,10 +927,10 @@ def create_app(
                 rec = eng.activate(ref, str(form.get("phrase", "")), cfg)
         except camp_errors() as e:
             return campaigns_view(request, 409, config=name, error=str(e), error_ref=ref)
-        return campaigns_view(request, config=name, done=("activated", rec.name))
+        return redirect_with("/campaigns", {"done": ("activated", rec.name)}, "#status", config=name)
 
     @app.post("/campaigns/pause", response_class=HTMLResponse)
-    async def campaigns_pause(request: Request) -> HTMLResponse:
+    async def campaigns_pause(request: Request) -> Response:
         form = await require_token(request)
         name, ref = str(form.get("config", "")), str(form.get("ref", ""))
         try:
@@ -872,10 +938,10 @@ def create_app(
                 rec = eng.pause(ref, "paused from the UI")
         except camp_errors() as e:
             return campaigns_view(request, 409, config=name, error=str(e), error_ref=ref)
-        return campaigns_view(request, config=name, done=("paused", rec.name))
+        return redirect_with("/campaigns", {"done": ("paused", rec.name)}, "#status", config=name)
 
     @app.post("/campaigns/sync", response_class=HTMLResponse)
-    async def campaigns_sync(request: Request) -> HTMLResponse:
+    async def campaigns_sync(request: Request) -> Response:
         form = await require_token(request)
         name = str(form.get("config", ""))
         try:
@@ -883,7 +949,13 @@ def create_app(
                 results = eng.sync()
         except camp_errors() as e:
             return campaigns_view(request, 409, config=name, error=str(e))
-        return campaigns_view(request, config=name, done=("synced", str(len(results))))
+        return redirect_with("/campaigns", {"done": ("synced", str(len(results)))}, "#status", config=name)
+
+    @app.get("/campaigns/{action}")
+    def campaigns_action_get(action: str) -> RedirectResponse:  # a reload or bookmark of a form's address
+        if action not in ("prepare", "activate", "pause", "sync", "starter", "demo"):
+            raise HTTPException(404, "no such page")
+        return RedirectResponse("/campaigns#demo" if action == "demo" else "/campaigns", status_code=303)
 
     @app.post("/campaigns/starter")
     async def campaigns_starter(request: Request) -> Response:
@@ -934,11 +1006,11 @@ def create_app(
     async def campaigns_demo(request: Request) -> HTMLResponse:
         await require_token(request)
         camp_demo.start()
-        return page(request, "_campaign_demo.html", cdemo=camp_demo)
+        return page(request, "_campaign_demo.html", cdemo=camp_demo, cdemo_rid=camp_demo_rid())
 
     @app.get("/campaigns/demo/status", response_class=HTMLResponse)
     def campaigns_demo_status(request: Request) -> HTMLResponse:
-        return page(request, "_campaign_demo.html", cdemo=camp_demo)
+        return page(request, "_campaign_demo.html", cdemo=camp_demo, cdemo_rid=camp_demo_rid())
 
     # --------------------------------------------------------------------------------------------------- settings
     def settings_view(request: Request, status_code: int = 200, **ctx: Any) -> HTMLResponse:
@@ -988,11 +1060,15 @@ def create_app(
         )
 
     @app.get("/settings", response_class=HTMLResponse)
-    def settings_page(request: Request) -> HTMLResponse:
-        return settings_view(request)
+    def settings_page(request: Request, m: str = "") -> HTMLResponse:
+        return settings_view(request, **take_flash(m))
+
+    @app.get("/settings/import")
+    def settings_import_get() -> RedirectResponse:  # a reload or bookmark of the upload form's address
+        return RedirectResponse("/settings#import", status_code=303)
 
     @app.post("/settings/import", response_class=HTMLResponse)
-    async def settings_import(request: Request) -> HTMLResponse:
+    async def settings_import(request: Request) -> Response:
         from creative_forge.perf.commands import import_csv
         from creative_forge.perf.csvimport import NETWORKS as CSV_NETWORKS
         from creative_forge.perf.store import PerfStore
@@ -1029,14 +1105,9 @@ def create_app(
                         tmp.unlink()
                     with contextlib.suppress(OSError):
                         tmpdir.rmdir()
-        return settings_view(
-            request,
-            422 if error else 200,
-            import_error=error,
-            import_detail=detail,
-            summary=summary,
-            uploaded=filename,
-        )
+        if error:
+            return settings_view(request, 422, import_error=error, import_detail=detail, uploaded=filename)
+        return redirect_with("/settings", {"summary": summary, "uploaded": filename}, "#import")
 
     # ------------------------------------------------------------------------------------------------ demo, doctor
     @app.post("/demo", response_class=HTMLResponse)
@@ -1044,6 +1115,10 @@ def create_app(
         await require_token(request)
         demo.start()
         return page(request, "_demo.html", demo_rid=demo_rid())
+
+    @app.get("/demo")
+    def demo_get() -> RedirectResponse:  # the demo form's address opened directly
+        return RedirectResponse("/", status_code=303)
 
     @app.get("/demo/status", response_class=HTMLResponse)
     def demo_status(request: Request) -> HTMLResponse:

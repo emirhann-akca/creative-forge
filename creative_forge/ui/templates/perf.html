@@ -48,7 +48,7 @@
 {% for net, d in rep.networks.items() %}
   {% set tt = d.totals %}
   <section class="card flush">
-    <header><h2>{{ net }}</h2><span class="muted small">{{ d.first }} → {{ d.last }}</span><span class="spacer"></span>
+    <header><h2>{{ net_labels.get(net, net) }}</h2><span class="muted small">{{ d.first }} → {{ d.last }}</span><span class="spacer"></span>
       {% if d.unmatched.names %}<span class="badge warn" data-tip="{{ t.pf_unmatched_tip }}">{{ d.unmatched.names }} {{ t.pf_unmatched }}</span>{% endif %}</header>
     <div class="pad">
     <div class="kpis compact">
@@ -82,7 +82,7 @@
           <td class="soft">{{ cm.rest|num(lang, 2) }} <span class="muted">({{ g.rest_creatives }})</span></td><td class="num">{{ cm.p_better|prob(lang) }}</td><td>{{ m.verdict_badge(cm, t, lang, unit) }}</td></tr>
       {% endfor %}</tbody>
     </table></div>
-    {% else %}<p class="muted">{{ t.pf_no_tags }} <code>forge perf register deliver/manifest.json</code></p>{% endif %}
+    {% else %}<p class="muted">{{ t.pf_no_tags }} <code>forge perf register "{{ root }}/deliver/manifest.json"</code></p>{% endif %}
     </div>
   </section>
 {% endfor %}
@@ -92,7 +92,7 @@
   <h3>{{ t.pf_empty }}</h3>
   <p>{{ t.pf_empty_bd }}</p>
   <a class="btn primary" href="/settings#import">{{ ic.icon("upload") }}{{ t.st_perf_btn }}</a>
-  <p class="muted small">{{ t.or_cli }} <code>forge perf import meta|applovin|csv</code> · <code>forge perf register deliver/manifest.json</code><br>{{ t.pf_store }} <code>{{ db }}</code></p>
+  <p class="muted small">{{ t.or_cli }} <code>forge perf import meta|applovin|csv</code> · <code>forge perf register "{{ root }}/deliver/manifest.json"</code><br>{{ t.pf_store }} <code>{{ db }}</code></p>
 </div></section>
 {% endif %}
 {% endblock %}

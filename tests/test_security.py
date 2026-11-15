@@ -74,7 +74,8 @@ def test_pages_carry_the_headers_and_no_inline_script(client, path):
     r = client.get(path)
     assert r.status_code == 200, path
     assert r.headers["x-frame-options"] == "DENY" and r.headers["x-content-type-options"] == "nosniff"
-    assert r.headers["referrer-policy"] == "no-referrer" and r.headers["cache-control"] == "no-store"
+    # same-origin: under no-referrer a browser sends "Origin: null" with a <form> POST, which the guard refuses
+    assert r.headers["referrer-policy"] == "same-origin" and r.headers["cache-control"] == "no-store"
     csp = _csp(r)
     assert csp["script-src"] == "'self'" and csp["frame-ancestors"] == "'none'" and csp["object-src"] == "'none'"
     inline = re.findall(r"<script(?![^>]*\bsrc=)([^>]*)>(.*?)</script>", r.text, re.S)

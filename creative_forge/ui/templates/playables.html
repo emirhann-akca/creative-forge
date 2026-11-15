@@ -41,7 +41,7 @@
 <section class="card flush">
   <header><h2>{{ t.pl_rules }}</h2><span class="spacer"></span><span class="muted small">{{ t.pl_rules_hint }}</span></header>
   <div class="table-scroll pad"><table class="t">
-    <thead><tr><th>{{ t.col_network }}</th><th>{{ t.pl_packaging }}</th><th>{{ t.pl_size }}</th><th>MRAID</th><th>CTA</th><th>{{ t.pl_source }}</th></tr></thead>
+    <thead><tr><th>{{ t.col_network }}</th><th>{{ t.pl_packaging }}</th><th>{{ t.pl_size }}</th><th>MRAID</th><th>CTA</th><th>{{ t.pl_source_col }}</th></tr></thead>
     <tbody>
     {% for x in rules %}{% set n = x.net %}
       <tr><td><b>{{ n.label }}</b>{% if not n.verified %} <span class="badge info">{{ t.pl_unverified }}</span>{% endif %}</td>
@@ -49,7 +49,7 @@
         <td class="soft">{% if n.html_max %}HTML ≤ {{ (n.html_max / 1000000)|num(lang, 0) }} MB{% endif %}{% if n.html_max and n.zip_max %} · {% endif %}{% if n.zip_max %}zip ≤ {{ (n.zip_max / 1000000)|num(lang, 0) }} MB{% endif %}{% if not n.html_max and not n.zip_max %}—{% endif %}</td>
         <td>{{ t["pl_mraid_" ~ n.mraid] }}{% if n.mraid_version %} {{ n.mraid_version }}{% endif %}</td>
         <td class="mono small">{{ x.cta|join(", ") or "—" }}</td>
-        <td>{% if x.source %}<a href="{{ x.source }}" target="_blank" rel="noopener noreferrer">{{ ic.icon("external") }}</a>{% else %}—{% endif %}</td></tr>
+        <td>{% if x.source %}<a href="{{ x.source }}" target="_blank" rel="noopener noreferrer" aria-label="{{ t.pl_source_of|format(n.label) }}" title="{{ t.pl_source_of|format(n.label) }}">{{ ic.icon("external") }}</a>{% else %}—{% endif %}</td></tr>
     {% endfor %}
     </tbody>
   </table></div>

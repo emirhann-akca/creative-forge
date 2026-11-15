@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% import "_icons.html" as ic %}
+{% import "_macros.html" as m %}
 {% block title %}{{ t.nav_settings }}{% endblock %}
 {% block body %}
 <div class="page-head">
@@ -39,7 +40,7 @@
       <div class="row"><a class="btn sm" href="/perf">{{ t.nav_perf }}</a><a class="btn sm" href="/creatives">{{ t.nav_creatives }}</a></div></div></div>
   {% endif %}
   {% if import_error %}
-    <div class="callout bad" role="alert">{{ ic.icon("alert") }}<div><b>{{ t["se_err_" ~ import_error] }}</b>{% if import_detail %}<div class="mono small">{{ import_detail }}</div>{% endif %}</div></div>
+    <div class="callout bad" role="alert" tabindex="-1" data-focus>{{ ic.icon("alert") }}<div><b>{{ t["se_err_" ~ import_error] }}</b>{% if import_detail %}<div class="small">{{ m.err(import_detail, t, lang) }}</div>{% endif %}</div></div>
   {% endif %}
   <form method="post" action="/settings/import" enctype="multipart/form-data" class="form-grid import-form">
     <input type="hidden" name="token" value="{{ token }}">

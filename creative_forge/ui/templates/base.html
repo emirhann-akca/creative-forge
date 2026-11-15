@@ -14,7 +14,7 @@
 <link rel="stylesheet" href="/static/forge.css">
 <script src="/static/htmx.min.js" defer></script>
 </head>
-<body hx-headers='{"X-Forge-Token": "{{ token }}"}'>
+<body hx-headers='{"X-Forge-Token": "{{ token }}"}' data-err-stale="{{ t.js_err_stale }}" data-err-offline="{{ t.js_err_offline }}" data-err-other="{{ t.js_err_other }}" data-reload="{{ t.js_reload }}" data-close="{{ t.js_close }}">
 <div class="shell">
   <aside class="sidebar" aria-label="{{ t.nav_label }}">
     <a class="brand" href="/"><span class="logo">{{ ic.icon("flame") }}</span>Creative Forge</a>
@@ -49,7 +49,7 @@
   <main class="main" id="main">
     <div class="inner">
 {% block body %}{% endblock %}
-      <p class="foot-note muted">Creative Forge {{ version }} · {{ t.footer_local }}</p>
+      <p class="foot-note muted">Creative Forge {{ version }} · {{ t.footer_network if network_mode else t.footer_local }}</p>
     </div>
   </main>
 </div>

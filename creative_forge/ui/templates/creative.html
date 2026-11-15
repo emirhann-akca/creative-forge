@@ -9,7 +9,7 @@
   <span class="spacer"></span>
   {% if has_report %}<a class="btn" href="/runs/{{ run.rid|qp }}/report.html" target="_blank" rel="noopener">{{ t.qa_report }} {{ ic.icon("external") }}</a>{% endif %}
   {% if c.rec.creative_id %}<a class="btn" href="/tests/new?variant={{ c.rec.creative_id }}">{{ ic.icon("plus") }}{{ t.cr_add_to_test }}</a>{% endif %}
-  <div class="sub badges">{{ m.qa_badge(c.rec.status, t) }} {{ m.review_badge(c.review, t) }} <span class="badge outline">{{ c.rec.format }}</span>{% if c.primary %} {{ m.verdict_badge(c.primary.comparison, t, lang) }}{% endif %}</div>
+  <div class="sub badges">{{ m.qa_badge(c.rec.status, t) }} <span id="hdr-review">{{ m.review_badge(c.review, t) }}</span> <span class="badge outline">{{ c.rec.format }}</span>{% if c.primary %} {{ m.verdict_badge(c.primary.comparison, t, lang) }}{% endif %}</div>
 </div>
 
 <div class="detail">

@@ -36,3 +36,9 @@
 {%- set m = maxv if maxv and maxv > 0 else 1 -%}
 <span class="ci {{ cls }}" aria-hidden="true"><span class="rng" style="left:{{ (lo / m * 100)|round(1) }}%;width:{{ ((hi - lo) / m * 100)|round(1) }}%"></span>{% if point is not none %}<span class="pt" style="left:{{ (point / m * 100)|round(1) }}%"></span>{% endif %}</span>
 {%- endmacro %}
+
+{# An engine error in the page's language; the original text stays one click away for a bug report. #}
+{% macro err(msg, t, lang) -%}
+{%- set shown = msg|uierr(lang) -%}
+{{ shown }}{% if shown != msg %}<details class="tech"><summary>{{ t.err_detail }}</summary><code>{{ msg }}</code></details>{% endif %}
+{%- endmacro %}

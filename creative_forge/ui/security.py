@@ -13,9 +13,9 @@ One ASGI middleware, outermost, so it also covers 4xx answers and ``/static``. I
    checked by each route (``require_token``; plain HTML forms carry it as a field), so a request needs both.
 4. Fetch Metadata resource isolation for reads: a cross-site request that is not a top-level navigation (an
    ``<img>``, ``<script>`` or ``fetch()`` from another site) is refused.
-5. Security headers: a Content-Security-Policy with no inline script at all, no framing, nosniff, no Referer,
-   same-origin opener and resource policies, and no-store on HTML (pages carry the token). A header a route set
-   itself (the stricter policy of a run's ``report.html``) is left as it is.
+5. Security headers: a Content-Security-Policy with no inline script at all, no framing, nosniff, no Referer to
+   other sites, same-origin opener and resource policies, and no-store on HTML (pages carry the token). A header a
+   route set itself (the stricter policy of a run's ``report.html``) is left as it is.
 """
 
 from __future__ import annotations
@@ -47,7 +47,10 @@ HEADERS: list[tuple[bytes, bytes]] = [
     (b"content-security-policy", CSP.encode("ascii")),
     (b"x-frame-options", b"DENY"),
     (b"x-content-type-options", b"nosniff"),
-    (b"referrer-policy", b"no-referrer"),
+    # same-origin, not no-referrer: under no-referrer a browser sends "Origin: null" with a plain <form> POST (Fetch
+    # standard, "append a request Origin header"), which step 3 refuses, so every non-htmx form would fail. Other
+    # sites still get no Referer at all.
+    (b"referrer-policy", b"same-origin"),
     (b"cross-origin-opener-policy", b"same-origin"),
     (b"cross-origin-resource-policy", b"same-origin"),
     (b"permissions-policy", b"camera=(), microphone=(), geolocation=(), payment=(), usb=()"),
